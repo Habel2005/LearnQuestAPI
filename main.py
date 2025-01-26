@@ -67,28 +67,30 @@ class CourseRecommender:
     def __init__(self, courses: List[CourseSchema]):
         self.courses = courses
         self.vectorizer = TfidfVectorizer(stop_words='english')
-    
+
     def recommend_courses(self, user_interests: List[str], top_k: int = 5):
         """Recommend courses based on user interests"""
+        if not self.courses:
+            raise HTTPException(status_code=404, detail="No courses available for recommendations")
+
         # Create TF-IDF matrix
         course_descriptions = [course.description for course in self.courses]
-        tfidf_matrix = self.vectorizer.fit_transform(
-            course_descriptions + user_interests
-        )
-        
+        tfidf_matrix = self.vectorizer.fit_transform(course_descriptions + user_interests)
+
         # Calculate similarity
-        similarity_scores = cosine_similarity(
-            tfidf_matrix[-len(user_interests):], 
-            tfidf_matrix[:-len(user_interests)]
-        )
-        
+        similarity_scores = cosine_similarity(tfidf_matrix[-len(user_interests):], tfidf_matrix[:-len(user_interests)])
+
         # Rank and return top recommendations
         recommendations = []
         for scores in similarity_scores:
             top_course_indices = scores.argsort()[-top_k:][::-1]
             recommendations.extend([self.courses[i] for i in top_course_indices])
-        
+
+        if not recommendations:
+            raise HTTPException(status_code=404, detail="No course recommendations found")
+
         return recommendations
+
 
 def _determine_category(topic: str) -> str:
     """Categorize course based on topic"""
@@ -178,12 +180,17 @@ async def generate_course(topic: str):
 
 @app.post("/recommend-courses")
 async def recommend_courses(user_interests: List[str]):
-    """Recommend courses based on user interests"""
-    # Fetch existing courses (would typically come from a database)
-    existing_courses = []  # Populate from your database
+    if not user_interests:
+        raise HTTPException(status_code=400, detail="User interests cannot be empty")
+
+    existing_courses = [
+        CourseSchema(id=str(uuid.uuid4()), title="Intro to Python", description="Learn Python from scratch", instructor="John Doe", category="Technology", tags=["Python", "Beginner"]),
+        CourseSchema(id=str(uuid.uuid4()), title="Advanced Machine Learning", description="Deep dive into ML algorithms", instructor="Jane Smith", category="Data Science", tags=["Machine Learning", "Advanced"]),
+    ]
     recommender = CourseRecommender(existing_courses)
     recommendations = recommender.recommend_courses(user_interests)
     return recommendations
+
 
 @app.get("/scrape-resources")
 async def scrape_resources(topic: str):
