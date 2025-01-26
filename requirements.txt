@@ -2,6 +2,8 @@ fastapi
 uvicorn
 pydantic
 httpx
-scikit-learn  # Change from sklearn to scikit-learn
+motor
+pymongo
 google-generativeai
-
+scikit-learn
+python-jose[cryptography]
