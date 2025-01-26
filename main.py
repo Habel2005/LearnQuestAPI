@@ -180,6 +180,7 @@ async def generate_course(topic: str):
 
 @app.post("/recommend-courses")
 async def recommend_courses(user_interests: List[str]):
+    print(f"Received user_interests: {user_interests}")  # This will print the received data
     if not user_interests:
         raise HTTPException(status_code=400, detail="User interests cannot be empty")
 
@@ -190,6 +191,7 @@ async def recommend_courses(user_interests: List[str]):
     recommender = CourseRecommender(existing_courses)
     recommendations = recommender.recommend_courses(user_interests)
     return recommendations
+
 
 
 @app.get("/scrape-resources")
