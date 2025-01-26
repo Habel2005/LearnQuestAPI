@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+pydantic
+httpx
+scikit-learn  # Change from sklearn to scikit-learn
+google-generativeai
+
