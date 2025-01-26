@@ -1,4 +1,5 @@
 import uuid
+import os
 from typing import List, Dict, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -14,8 +15,12 @@ def read_root():
     return {"message": "Hello World"}
 
 # AI Configuration
-genai.configure(api_key='YOUR_GEMINI_API_KEY')
-ai_model = genai.GenerativeModel('gemini-pro')
+# Fetch the API key from environment variables
+gemini_api_key = os.getenv('GEMINI_API_KEY')
+
+# Configure the Gemini API
+genai.configure(api_key=gemini_api_key)
+ai_model = genai.GenerativeModel('gemini-turbo')
 
 class CourseSchema(BaseModel):
     id: str = str(uuid.uuid4())
