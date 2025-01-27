@@ -34,10 +34,17 @@ MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
 
 # Configure Gemini AI
 genai.configure(api_key=GEMINI_API_KEY)
-ai_model = genai.GenerativeModel('gemini-pro')
+ai_model = genai.GenerativeModel('gemini-turbo')
 
 # Course Model
-class CourseSchema(BaseModel):
+class CourseModule(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    content: str
+    resources: List[str] = []
+    is_completed: bool = False
+
+class Course(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     description: str
@@ -49,7 +56,81 @@ class CourseSchema(BaseModel):
     completed_modules: int = 0
     tags: List[str] = []
     progress: float = 0.0
-    modules: List[Dict] = []
+    modules: List[CourseModule] = []
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Example Seed Data
+INITIAL_COURSES = [
+    {
+        "title": "Introduction to Python Programming",
+        "description": "Learn Python from scratch - perfect for beginners",
+        "category": "Programming",
+        "tags": ["Python", "Beginner", "Programming"],
+        "total_modules": 6,
+        "modules": [
+            {
+                "title": "Python Basics",
+                "content": "Learn fundamental Python syntax and concepts",
+                "is_completed": False
+            },
+            {
+                "title": "Data Types and Variables",
+                "content": "Understanding Python's data types and variable management",
+                "is_completed": False
+            }
+        ]
+    },
+    {
+        "title": "Web Development Fundamentals",
+        "description": "Master the basics of web development with HTML, CSS, and JavaScript",
+        "category": "Web Development",
+        "tags": ["Web Development", "Frontend", "JavaScript"],
+        "total_modules": 5,
+        "modules": [
+            {
+                "title": "HTML Fundamentals",
+                "content": "Learn the structure of web pages",
+                "is_completed": False
+            },
+            {
+                "title": "CSS Styling",
+                "content": "Create beautiful and responsive designs",
+                "is_completed": False
+            }
+        ]
+    },
+    {
+        "title": "Machine Learning Basics",
+        "description": "Introduction to machine learning concepts and algorithms",
+        "category": "Data Science",
+        "tags": ["Machine Learning", "AI", "Data Science"],
+        "total_modules": 7,
+        "modules": [
+            {
+                "title": "ML Fundamentals",
+                "content": "Understanding machine learning principles",
+                "is_completed": False
+            },
+            {
+                "title": "Supervised Learning",
+                "content": "Exploring supervised learning algorithms",
+                "is_completed": False
+            }
+        ]
+    }
+]
+
+# MongoDB Initialization Function
+def initialize_database():
+    client = MongoClient(MONGO_URI)
+    db = client['learn_quest_db']
+    courses_collection = db['courses']
+
+    # Clear existing courses and insert initial seed data
+    courses_collection.delete_many({})
+    courses_collection.insert_many(INITIAL_COURSES)
+
+initialize_database()
 
 # MongoDB Connection
 class MongoDB:
