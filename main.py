@@ -1,3 +1,4 @@
+import datetime
 import os
 import uuid
 from typing import List, Dict, Optional
@@ -6,6 +7,8 @@ import google.generativeai as genai
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from pydantic_core import CoreSchema
+from pymongo import MongoClient
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import motor.motor_asyncio
@@ -139,7 +142,7 @@ class MongoDB:
         self.db = self.client['learn_quest_db']
         self.courses_collection = self.db.get_collection('courses')
 
-    async def insert_course(self, course: CourseSchema):
+    async def insert_course(self, course: CoreSchema):
         """Insert a new course into the database"""
         result = await self.courses_collection.insert_one(course.model_dump())
         return result.inserted_id
@@ -147,15 +150,15 @@ class MongoDB:
     async def get_all_courses(self):
         """Retrieve all courses"""
         courses = await self.courses_collection.find().to_list(1000)
-        return [CourseSchema(**course) for course in courses]
+        return [CoreSchema(**course) for course in courses]
 
     async def get_courses_by_tags(self, tags: List[str]):
         """Find courses matching given tags"""
         query = {'tags': {'$in': tags}}
         courses = await self.courses_collection.find(query).to_list(10)
-        return [CourseSchema(**course) for course in courses]
+        return [CoreSchema(**course) for course in courses]
 
-    async def upsert_course(self, course: CourseSchema):
+    async def upsert_course(self, course: CoreSchema):
         """Update or insert a course"""
         await self.courses_collection.replace_one(
             {'id': course.id}, 
@@ -169,7 +172,7 @@ mongo_db = MongoDB()
 # Course Generation Utility
 class CourseGenerator:
     @staticmethod
-    def generate_course_content(topic: str) -> CourseSchema:
+    def generate_course_content(topic: str) -> CoreSchema:
         """Generate a comprehensive course using AI"""
         try:
             # Generate course structure
@@ -194,7 +197,7 @@ class CourseGenerator:
                 'modules': CourseGenerator._generate_modules(response.text)
             }
             
-            return CourseSchema(**course_data)
+            return CoreSchema(**course_data)
         except Exception as e:
             print(f"Course generation error: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to generate course: {str(e)}")
@@ -271,7 +274,7 @@ class CourseGenerator:
 
 # Course Recommender
 class CourseRecommender:
-    def __init__(self, courses: List[CourseSchema]):
+    def __init__(self, courses: List[CoreSchema]):
         self.courses = courses
         self.vectorizer = TfidfVectorizer(stop_words='english')
 
@@ -337,7 +340,7 @@ class ExternalResourceService:
             return []
 
 # API Endpoints
-@app.post("/generate-course", response_model=CourseSchema)
+@app.post("/generate-course", response_model=CoreSchema)
 async def generate_course(request: Request):
     """Endpoint to generate a new course"""
     body = await request.json()
@@ -349,7 +352,7 @@ async def generate_course(request: Request):
     await mongo_db.insert_course(course)
     return course
 
-@app.post("/recommend-courses", response_model=List[CourseSchema])
+@app.post("/recommend-courses", response_model=List[CoreSchema])
 async def recommend_courses(request: Request):
     """Recommend courses based on user interests"""
     try:
