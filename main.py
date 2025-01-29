@@ -1,92 +1,85 @@
 # main.py
+import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import google.generativeai as genai
 import httpx
-import uuid
+import json
 
-app = FastAPI()
-genai.configure(api_key="YOUR_GEMINI_KEY")
+
+# Initialize Gemini
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-pro')
 
-# ========== CORE LOGIC ==========
-class CourseRequest(BaseModel):
-    topic: str  # What the user searches (e.g., "Learn Python")
+app = FastAPI()
 
-def fetch_resources(topic: str):
-    """Get videos, articles, repos for the topic"""
-    resources = []
+class CourseRequest(BaseModel):
+    topic: str
+
+@app.post("/generate-course")
+async def generate_course(request: CourseRequest):
+    """Generate course with YouTube + GitHub resources"""
+    try:
+        # Fetch resources
+        youtube_resources = await fetch_youtube_videos(request.topic)
+        github_resources = await fetch_github_repos(request.topic)
+        all_resources = youtube_resources + github_resources
+
+        # Generate course structure
+        course = generate_course_structure(request.topic, all_resources)
+        
+        
+        return course
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def fetch_youtube_videos(topic: str):
+    """Fetch YouTube videos using API"""
+    api_key = os.getenv("YOUTUBE_API_KEY")
+    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q={topic}&key={api_key}"
     
-    # 1. YouTube API (install google-api-python-client)
-    youtube_url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={topic}&key=YOUR_YOUTUBE_KEY"
-    youtube_res = httpx.get(youtube_url).json()
-    for item in youtube_res.get("items", []):
-        resources.append({
-            "type": "video",
-            "title": item["snippet"]["title"],
-            "url": f"https://youtube.com/watch?v={item['id']['videoId']}"
-        })
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return [
+            {
+                "type": "video",
+                "title": item["snippet"]["title"],
+                "url": f"https://youtube.com/watch?v={item['id']['videoId']}"
+            } for item in response.json().get("items", [])
+        ]
+
+async def fetch_github_repos(topic: str):
+    """Fetch GitHub repos using API"""
+    url = f"https://api.github.com/search/repositories?q={topic}&sort=stars"
     
-    # 2. GitHub API (simplified example)
-    github_url = f"https://api.github.com/search/repositories?q={topic}"
-    github_res = httpx.get(github_url).json()
-    for repo in github_res.get("items", []):
-        resources.append({
-            "type": "code",
-            "title": repo["name"],
-            "url": repo["html_url"]
-        })
-    
-    # 3. Add web scraping here (e.g., BeautifulSoup)
-    
-    return resources
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return [
+            {
+                "type": "code",
+                "title": repo["name"],
+                "url": repo["html_url"]
+            } for repo in response.json().get("items", [])[:3]
+        ]
 
 def generate_course_structure(topic: str, resources: list):
-    """Use Gemini to organize resources into modules"""
+    """Generate course modules using Gemini"""
     prompt = f"""
-    Create a 5-module course for learning {topic} using these resources: {resources}.
-    Each module must have:
-    - Title
-    - Learning objective (1 sentence)
-    - Resources (pick 2-3 from the list)
-    - Duration estimate (e.g., "1h 30m")
-
-    Output format (strict JSON):
+    Create a 5-module course for {topic} using these resources: {resources}.
+    Output strict JSON format:
     {{
-        "course_title": "string",
+        "title": "Course Title",
         "modules": [
             {{
-                "title": "string",
-                "objective": "string",
-                "resources": ["url1", "url2"],
-                "duration": "string"
+                "title": "Module Title",
+                "objective": "Learning objective",
+                "resources": ["resource_url1", "resource_url2"],
+                "duration": "1h 30m"
             }}
         ]
     }}
     """
     
     response = model.generate_content(prompt)
-    try:
-        # Extract JSON from Gemini's response
-        json_str = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(json_str)
-    except:
-        raise HTTPException(status_code=500, detail="Failed to generate course")
-
-@app.post("/generate-course")
-async def generate_course(request: CourseRequest):
-    """Main endpoint for course generation"""
-    # 1. Fetch resources
-    resources = fetch_resources(request.topic)
-    
-    # 2. Generate structured course
-    course = generate_course_structure(request.topic, resources)
-    
-    # 3. Save to Firebase (optional)
-    # Implement Firebase Firestore logic here
-    
-    return {
-        "course_id": str(uuid.uuid4()),
-        "topic": request.topic,
-        **course
-    }
+    clean_json = response.text.replace("```json", "").replace("```", "").strip()
+    return json.loads(clean_json)
