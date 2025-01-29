@@ -36,17 +36,27 @@ async def generate_course(request: CourseRequest):
 async def fetch_youtube_videos(topic: str):
     """Fetch YouTube videos using API"""
     api_key = os.getenv("YOUTUBE_API_KEY")
-    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q={topic}&key={api_key}"
+    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q={topic}&key={api_key}"
     
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        return [
-            {
-                "type": "video",
-                "title": item["snippet"]["title"],
-                "url": f"https://youtube.com/watch?v={item['id']['videoId']}"
-            } for item in response.json().get("items", [])
-        ]
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            data = response.json()
+            
+            videos = []
+            for item in data.get("items", []):
+                # Check if videoId exists
+                if 'id' in item and 'videoId' in item['id']:
+                    videos.append({
+                        "type": "video",
+                        "title": item["snippet"]["title"],
+                        "url": f"https://youtube.com/watch?v={item['id']['videoId']}"
+                    })
+            return videos
+            
+    except Exception as e:
+        print(f"YouTube API error: {str(e)}")
+        return []
 
 async def fetch_github_repos(topic: str):
     """Fetch GitHub repos using API"""
