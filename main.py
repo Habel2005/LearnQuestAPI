@@ -1,95 +1,193 @@
-# main.py
 import os
+import json
+import httpx
+from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import google.generativeai as genai
-import httpx
-import json
+import firebase_admin
+from firebase_admin import credentials, firestore
+from llama_cpp import Llama
+from typing import List, Dict
 
-
-# Initialize Gemini
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-pro')
-
+# ========== INITIALIZATION ==========
 app = FastAPI()
 
-class CourseRequest(BaseModel):
-    topic: str
+# Firebase Configuration
+firebase_cred = {
+  "type": os.getenv("FIREBASE_TYPE"),
+  "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+  "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+  "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace('\\n', '\n'),
+  "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+  "client_id": os.getenv("FIREBASE_CLIENT_ID"),
+  "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
+  "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
+  "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_CERT_URL"),
+  "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_CERT_URL")
+}
+firebase_admin.initialize_app(firebase_cred)
+db = firestore.client()
 
-@app.post("/generate-course")
-async def generate_course(request: CourseRequest):
-    """Generate course with YouTube + GitHub resources"""
-    try:
-        # Fetch resources
-        youtube_resources = await fetch_youtube_videos(request.topic)
-        github_resources = await fetch_github_repos(request.topic)
-        all_resources = youtube_resources + github_resources
+# AI Configuration
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_model = genai.GenerativeModel('gemini-pro')
 
-        # Generate course structure
-        course = generate_course_structure(request.topic, all_resources)
+llama_model = Llama(
+    model_path="models/llama-3.3B-q4_0.gguf",
+    n_ctx=2048,
+    n_threads=4
+)
+
+# ========== DATA MODELS ==========
+class UserPreferences(BaseModel):
+    skill_level: str  # Basic/Intermediate/Advanced
+    interests: List[str]
+    learning_style: str  # Videos/Articles/Flashcards/Guides
+    daily_commitment: str  # 5 min/10 min/etc.
+
+class CourseModule(BaseModel):
+    title: str
+    objective: str
+    duration: str
+    content: Dict[str, List[str]]
+
+# ========== CORE SERVICES ==========
+class CourseGenerator:
+    @staticmethod
+    async def generate_course(user_id: str, topic: str) -> Dict:
+        """Orchestrate full course generation workflow"""
+        # Get user preferences
+        user_ref = db.collection("users").document(user_id)
+        prefs = user_ref.get().to_dict().get("preferences", {})
         
+        # Phase 1: Course Structure with Gemini
+        structure = await GeminiService.create_course_structure(
+            topic, 
+            prefs.skill_level,
+            prefs.daily_commitment
+        )
         
-        return course
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Phase 2: Content Curation with Gemini
+        curated_resources = await GeminiService.curate_resources(
+            topic, 
+            structure['modules'],
+            prefs.learning_style
+        )
+        
+        # Phase 3: Educational Content with Llama
+        enriched_modules = await LlamaService.enrich_modules(
+            structure['modules'],
+            prefs.skill_level
+        )
+        
+        # Compile final course
+        course_data = {
+            "title": structure['title'],
+            "metadata": {
+                "target_skill_level": prefs.skill_level,
+                "total_duration": sum([_parse_duration(m['duration']) for m in enriched_modules]),
+                "preferred_format": prefs.learning_style
+            },
+            "modules": enriched_modules,
+            "resources": curated_resources
+        }
+        
+        # Save to Firestore
+        course_ref = db.collection("courses").document()
+        course_ref.set(course_data)
+        
+        return course_data
 
-async def fetch_youtube_videos(topic: str):
-    """Fetch YouTube videos using API"""
-    api_key = os.getenv("YOUTUBE_API_KEY")
-    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q={topic}&key={api_key}"
-    
+class GeminiService:
+    @staticmethod
+    async def create_course_structure(topic: str, skill_level: str, commitment: str) -> Dict:
+        prompt = f"""Create a {skill_level} course structure for {topic} with:
+        - Daily commitment: {commitment}
+        - Clear progression from basic to advanced
+        - 5-7 modules with objectives and durations
+        Output JSON format:
+        {{
+            "title": "Course Title",
+            "modules": [
+                {{
+                    "title": "Module Title",
+                    "objective": "Learning goal",
+                    "duration": "X mins"
+                }}
+            ]
+        }}"""
+        response = gemini_model.generate_content(prompt)
+        return _parse_gemini_json(response.text)
+
+    @staticmethod
+    async def curate_resources(topic: str, modules: List[Dict], learning_style: str) -> Dict:
+        resource_types = {
+            'Videos': await YouTubeService.fetch_videos(topic),
+            'Articles': await WebService.fetch_articles(topic),
+            'Guides': await GitHubService.fetch_guides(topic)
+        }
+        
+        prompt = f"""Select best resources for {learning_style} learners from:
+        {json.dumps(resource_types)}
+        Assign to these modules: {json.dumps(modules)}
+        Output JSON format: {{"module_resources": {{"Module1": ["url1", ...]}}}}"""
+        
+        response = gemini_model.generate_content(prompt)
+        return _parse_gemini_json(response.text)
+
+class LlamaService:
+    @staticmethod
+    async def enrich_modules(modules: List[Dict], skill_level: str) -> List[Dict]:
+        enriched = []
+        for module in modules:
+            prompt = f"""Create detailed educational content for:
+            Module: {module['title']}
+            Objective: {module['objective']}
+            Skill Level: {skill_level}
+            Include explanations, examples, and 3 quiz questions"""
+            
+            output = llama_model(prompt, max_tokens=1024)
+            module['content'] = _parse_llama_content(output['choices'][0]['text'])
+            enriched.append(module)
+        return enriched
+
+# ========== UTILITIES ==========
+def _parse_gemini_json(text: str) -> Dict:
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-            data = response.json()
-            
-            videos = []
-            for item in data.get("items", []):
-                # Check if videoId exists
-                if 'id' in item and 'videoId' in item['id']:
-                    videos.append({
-                        "type": "video",
-                        "title": item["snippet"]["title"],
-                        "url": f"https://youtube.com/watch?v={item['id']['videoId']}"
-                    })
-            return videos
-            
-    except Exception as e:
-        print(f"YouTube API error: {str(e)}")
-        return []
+        return json.loads(text.split("```json")[1].split("```")[0])
+    except:
+        raise HTTPException(500, "Failed to parse Gemini output")
 
-async def fetch_github_repos(topic: str):
-    """Fetch GitHub repos using API"""
-    url = f"https://api.github.com/search/repositories?q={topic}&sort=stars"
-    
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        return [
-            {
-                "type": "code",
-                "title": repo["name"],
-                "url": repo["html_url"]
-            } for repo in response.json().get("items", [])[:3]
-        ]
+def _parse_llama_content(text: str) -> Dict:
+    # Implement custom parsing based on your Llama output format
+    return {"explanations": text.split("\n\n")}
 
-def generate_course_structure(topic: str, resources: list):
-    """Generate course modules using Gemini"""
-    prompt = f"""
-    Create a 5-module course for {topic} using these resources: {resources}.
-    Output strict JSON format:
-    {{
-        "title": "Course Title",
-        "modules": [
-            {{
-                "title": "Module Title",
-                "objective": "Learning objective",
-                "resources": ["resource_url1", "resource_url2"],
-                "duration": "1h 30m"
-            }}
-        ]
-    }}
-    """
+def _parse_duration(duration_str: str) -> int:
+    # Convert "X mins" to total minutes
+    return int(duration_str.split()[0])
+
+# ========== API ENDPOINTS ==========
+@app.post("/courses/generate")
+async def generate_course_endpoint(request: CourseRequest):
+    return await CourseGenerator.generate_course(request.user_id, request.topic)
+
+@app.get("/user/recommendations/{user_id}")
+async def get_recommendations(user_id: str):
+    user_ref = db.collection("users").document(user_id)
+    prefs = user_ref.get().to_dict()["preferences"]
     
-    response = model.generate_content(prompt)
-    clean_json = response.text.replace("```json", "").replace("```", "").strip()
-    return json.loads(clean_json)
+    return {
+        "daily_quests": await _generate_daily_quests(prefs),
+        "skill_path": await _build_skill_path(prefs),
+        "trending": _get_trending_courses(prefs.interests)
+    }
+
+async def _generate_daily_quests(prefs: UserPreferences):
+    prompt = f"""Create 3 daily learning quests for:
+    - Skills: {prefs.skill_level}
+    - Interests: {prefs.interests}
+    - Max duration: {prefs.daily_commitment}
+    Format: JSON array with title/duration/type"""
+    response = gemini_model.generate_content(prompt)
+    return _parse_gemini_json(response.text)

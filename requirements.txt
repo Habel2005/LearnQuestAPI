@@ -3,3 +3,6 @@ uvicorn>=0.15.0
 google-generativeai>=0.3.0
 httpx>=0.23.0
 python-dotenv>=0.19.0
+google-generativeai 
+llama-cpp-python
+firebase-admin
