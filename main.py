@@ -7,7 +7,7 @@ from pydantic import BaseModel
 import google.generativeai as genai
 import firebase_admin
 from firebase_admin import credentials, firestore
-from llama_cpp import Llama
+from groq import Groq
 from typing import List, Dict
 
 # ========== INITIALIZATION ==========
@@ -136,21 +136,18 @@ class GeminiService:
         response = gemini_model.generate_content(prompt)
         return _parse_gemini_json(response.text)
 
-class LlamaService:
-    @staticmethod
-    async def enrich_modules(modules: List[Dict], skill_level: str) -> List[Dict]:
-        enriched = []
-        for module in modules:
-            prompt = f"""Create detailed educational content for:
-            Module: {module['title']}
-            Objective: {module['objective']}
-            Skill Level: {skill_level}
-            Include explanations, examples, and 3 quiz questions"""
-            
-            output = llama_model(prompt, max_tokens=1024)
-            module['content'] = _parse_llama_content(output['choices'][0]['text'])
-            enriched.append(module)
-        return enriched
+class GroqService:
+    def __init__(self):
+        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    
+    def enrich_content(self, prompt: str) -> str:
+        completion = self.client.chat.completions.create(
+            model="llama3-70b-8192",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+            max_tokens=1024,
+        )
+        return completion.choices[0].message.content
 
 # ========== UTILITIES ==========
 def _parse_gemini_json(text: str) -> Dict:
