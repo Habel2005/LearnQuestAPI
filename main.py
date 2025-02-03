@@ -64,7 +64,7 @@ class HomepageService:
     @staticmethod
     async def get_homepage_data(user_id: str) -> Dict:
         user_ref = db.collection("users").document(user_id)
-        user_data = user_ref.get().to_dict()
+        user_data = (await user_ref.get()).to_dict()
         
         return {
             "daily_learning_paths": await LearningPathService.generate_paths(user_data),
@@ -76,34 +76,94 @@ class HomepageService:
 class LearningPathService:
     @staticmethod
     async def generate_paths(user_data: Dict) -> List[Dict]:
-        prompt = f"""Generate 3 daily learning paths for a user with:
-        - Skills: {user_data['preferences']['skill_level']}
-        - Interests: {user_data['preferences']['interests']}
-        - Format: {{
-            title: "AI-Generated Python Fundamentals",
-            duration: "2-3h",
-            resource_count: "15+ resources",
-            components: ["Interactive Exercises", ...],
-            difficulty: "Beginner",
-            tags: ["Programming", "Python"]
-        }}"""
+        try:
+            prompt = f"""Generate 3 learning paths in JSON format for {user_data['profile']['fullName']} with:
+            - Skill Level: {user_data['preferences']['skillLevel']}
+            - Interests: {', '.join(user_data['preferences']['interests'])}
+            - Learning Style: {user_data['preferences']['learningStyle']}
+            
+            Format:
+            {{
+                "paths": [
+                    {{
+                        "title": "AI-Generated Python Fundamentals",
+                        "duration": "2-3h",
+                        "resource_count": "15+ resources",
+                        "components": ["Interactive Exercises", "Video Tutorials"],
+                        "difficulty": "Beginner",
+                        "tags": ["Programming", "Python"]
+                    }}
+                ]
+            }}"""
+            
+            response = groq.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="mixtral-8x7b-32768",
+                response_format={"type": "json_object"}
+            )
+            data = json.loads(response.choices[0].message.content)
+            return await self._add_progress(data["paths"], user_data["uid"])
+            
+        except Exception as e:
+            print(f"Path generation error: {e}")
+            return self._get_fallback_paths()
+
+    @staticmethod
+    async def _add_progress(paths: List[Dict], user_id: str) -> List[Dict]:
+        progress_ref = db.collection("users").document(user_id).collection("progress")
+        progress_doc = await progress_ref.document("learning_paths").get()
+        progress_data = progress_doc.to_dict() or {}
         
-        response = gemini.generate_content(prompt)
-        return json.loads(response.text)
+        for path in paths:
+            path_id = hashlib.md5(path["title"].encode()).hexdigest()
+            path["progress"] = f"{progress_data.get(path_id, 0)}/{path['resource_count'].split('+')[0]}"
+            
+        return paths
+
+    @staticmethod
+    def _get_fallback_paths() -> List[Dict]:
+        return [{
+            "title": "Python Fundamentals",
+            "duration": "2-3h",
+            "resource_count": "15+ resources",
+            "components": ["Interactive Exercises", "Documentation"],
+            "difficulty": "Beginner",
+            "tags": ["Programming", "Python"],
+            "progress": "0/15"
+        }]
 
 class CourseService:
     @staticmethod
-    async def get_top_rated() -> List[Dict]:
+    async def get_top_rated(user_id: str) -> List[Dict]:
         courses_ref = db.collection("courses")
-        query = courses_ref.where("rating", ">=", 4.5).limit(3)
-        return [doc.to_dict() for doc in query.stream()]
+        query = courses_ref.order_by("rating", direction=firestore.Query.DESCENDING).limit(3)
+        
+        courses = []
+        async for doc in query.stream():
+            course = doc.to_dict()
+            course["id"] = doc.id
+            course["isFavorite"] = await self._check_favorite(user_id, doc.id)
+            courses.append(self._format_course(course))
+            
+        return courses
+
+    @staticmethod
+    def _format_course(course: Dict) -> Dict:
+        return {
+            "title": course.get("title", "Untitled Course"),
+            "duration": f"{random.randint(3, 6)} Parts",
+            "rating": round(random.uniform(4.5, 5.0), 1),
+            "learners": f"{random.randint(1000, 3000)//100 * 100}k",
+            "techStack": course.get("tech_stack", ["Python", "AI"]),
+            "imageUrl": course.get("image_url", "assets/default_course.png")
+        }
+
+    @staticmethod
+    async def _check_favorite(user_id: str, course_id: str) -> bool:
+        fav_ref = db.collection("users").document(user_id).collection("favorites").document(course_id)
+        return (await fav_ref.get()).exists
 
 class CategoryService:
-    @staticmethod
-    async def get_categories() -> List[Dict]:
-        categories_ref = db.collection("categories")
-        return [doc.to_dict() for doc in categories_ref.stream()]
-    
     @staticmethod
     def get_category_tiles() -> List[Dict]:
         return [
@@ -112,22 +172,40 @@ class CategoryService:
                 "subtitle": "Hands-on coding tasks",
                 "icon": "flash_on",
                 "gradient": ["#4285F4", "#8AB4F8"],
-                "active_count": "3 new today"
+                "active_count": "3 new today",
+                "route": "/daily-challenges"
             },
-            # ... other tiles ...
+            {
+                "title": "Quick Learn",
+                "subtitle": "Bite-sized tech concepts",
+                "icon": "lightbulb_outline",
+                "gradient": ["#9C27B0", "#E1BEE7"],
+                "active_count": "12 concepts",
+                "route": "/quick-learn"
+            },
+            # Add other tiles similarly
         ]
-    
+
     @staticmethod
-    @app.post("/categories")
-    async def create_category(category_data: Dict):
-        category_ref = db.collection("categories").document()
-        category_ref.set({
-            "name": category_data["name"],
-            "color": _get_category_color(category_data["name"]),
-            "image": f"card{random.randint(1, 4)}.jpg",
-            "created_at": datetime.now().isoformat()
-        })
-        return {"status": "success"}
+    async def get_categories(limit: int = 3) -> List[Dict]:
+        categories_ref = db.collection("categories")
+        docs = [doc async for doc in categories_ref.limit(limit).stream()]
+        
+        return [{
+            "name": doc.get("name"),
+            "color": _get_category_color(doc.get("name")),
+            "image": f"assets/card{random.randint(1, 4)}.jpg"
+        } for doc in docs]
+
+    @staticmethod
+    async def get_all_categories() -> List[Dict]:
+        categories_ref = db.collection("categories")
+        docs = [doc async for doc in categories_ref.stream()]
+        return [{
+            "name": doc.get("name"),
+            "color": _get_category_color(doc.get("name")),
+            "image": f"assets/card{random.randint(1, 4)}.jpg"
+        } for doc in docs]
 
 # ========== UTILITY FUNCTIONS ==========
 def _get_category_color(category_name: str) -> str:
@@ -162,7 +240,15 @@ async def fetch_youtube_videos(topic: str) -> List[Dict]:
 # ========== API ENDPOINTS ==========
 @app.get("/home/{user_id}")
 async def get_home_data(user_id: str):
-    return await HomepageService.get_homepage_data(user_id)
+    user_ref = db.collection("users").document(user_id)
+    user_data = (await user_ref.get()).to_dict()
+    
+    return {
+        "daily_learning_paths": await LearningPathService.generate_paths(user_data),
+        "top_rated_courses": await CourseService.get_top_rated(user_id),
+        "category_tiles": CategoryService.get_category_tiles(),
+        "categories": await CategoryService.get_categories()
+    }
 
 @app.post("/generate-learning-path")
 async def generate_learning_path(user_id: str):
@@ -170,9 +256,9 @@ async def generate_learning_path(user_id: str):
     user_data = user_ref.get().to_dict()
     return await LearningPathService.generate_paths(user_data)
 
-@app.get("/categories")
+@app.get("/categories/all")
 async def get_all_categories():
-    return await CategoryService.get_categories()
+    return await CategoryService.get_all_categories()
 
 # ========== STARTUP ==========
 if __name__ == "__main__":
