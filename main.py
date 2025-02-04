@@ -16,11 +16,13 @@ from typing import List, Dict
 app = FastAPI()
 
 # Firebase Configuration
+private_key = os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n')
+
 firebase_cred = credentials.Certificate({
     "type": os.getenv("FIREBASE_TYPE"),
     "project_id": os.getenv("FIREBASE_PROJECT_ID"),
     "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
-    "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace('\\n', '\n'),
+    "private_key": private_key,  # Use the corrected key
     "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
     "client_id": os.getenv("FIREBASE_CLIENT_ID"),
     "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
@@ -261,6 +263,10 @@ async def generate_learning_path(user_id: str):
 async def get_all_categories():
     return await CategoryService.get_all_categories()
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+    
 # ========== STARTUP ==========
 if __name__ == "__main__":
     import uvicorn
