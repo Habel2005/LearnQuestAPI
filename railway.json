@@ -1,11 +1,14 @@
 {
-    "builds": [
-      {
-        "src": "main.py",
-        "use": "@railway/python",
-        "config": {
-          "serverCommand": "uvicorn main:app --host 0.0.0.0 --port ${PORT}"
+    "build": {
+      "nixpacksPlan": {
+        "providers": {
+          "python": {
+            "version": "3.10"
+          }
         }
       }
-    ]
+    },
+    "deploy": {
+      "startCommand": "uvicorn main:app --host 0.0.0.0 --port ${PORT}"
+    }
   }
