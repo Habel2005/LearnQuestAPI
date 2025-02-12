@@ -278,6 +278,6 @@ async def root():
     return {"message": "Hello from Railway!"}
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8080))  # Railway sets the PORT dynamically
-    logging.info(f"Starting FastAPI on port {port}")
+    port = int(os.getenv("PORT", 8080))  
+    print(f"🚀 Starting FastAPI on port {port}...")
     uvicorn.run(app, host="0.0.0.0", port=port)
