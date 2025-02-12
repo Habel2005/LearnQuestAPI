@@ -18,10 +18,8 @@ from typing import List, Dict
 load_dotenv()
 import uvicorn
 import logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ========== INITIALIZATION ==========
@@ -292,46 +290,168 @@ async def generate_learning_path(user_id: str):
 async def get_all_categories():
     return await CategoryService.get_all_categories()
 
-@app.get("/health")
-async def health_check():
+
+@app.get("/debug/firebase-test")
+async def test_firebase_auth():
     try:
-        # Test Firebase connection
-        db.collection('test').limit(1).get()
-        
-        # Test AI services
-        gemini_ok = bool(gemini)
-        groq_ok = bool(groq)
-        
+        # 1. Get the current Firebase app
+        app = firebase_admin.get_app()
+
+        # 2. Get the credentials from the app
+        creds = app.credential
+
+        # 3. Try to get an access token (remove `await`)
+        access_token_info = app.credential.get_access_token()
+
         return {
-            "status": "ok",
-            "timestamp": datetime.now().isoformat(),
-            "firebase_connected": True,
-            "gemini_available": gemini_ok,
-            "groq_available": groq_ok,
-            "environment": {
-                "firebase_creds": bool(os.getenv("FIREBASE_CREDENTIALS_BASE64")),
-                "gemini_key": bool(os.getenv("GEMINI_API_KEY")),
-                "groq_key": bool(os.getenv("GROQ_API_KEY")),
-                "youtube_key": bool(os.getenv("YOUTUBE_API_KEY")),
-            }
+            "status": "success",
+            "project_id": app.project_id,
+            "service_account_email": creds.service_account_email if hasattr(creds, 'service_account_email') else None,
+            "token_acquired": bool(access_token_info),
+            "token_expiry": str(access_token_info.expiry) if access_token_info else None
         }
     except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
         return {
             "status": "error",
             "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "error_type": type(e).__name__
         }
 
-
-@app.get("/test-firebase")
-async def test_firebase():
+    
+@app.get("/debug/firebase")
+async def debug_firebase():
     try:
-        docs = db.collection('test').stream()
-        return {"status": "connected", "count": len(list(docs))}
+        # Check if credentials exist
+        firebase_creds_b64 = os.getenv("FIREBASE_CREDENTIALS_BASE64")
+        if not firebase_creds_b64:
+            return {"error": "FIREBASE_CREDENTIALS_BASE64 environment variable is missing"}
+        
+        # Try decoding the base64
+        try:
+            creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
+            creds_dict = json.loads(creds_json)
+            
+            # Check for required fields
+            required_fields = [
+                "type", 
+                "project_id", 
+                "private_key_id", 
+                "private_key", 
+                "client_email"
+            ]
+            
+            missing_fields = [field for field in required_fields if field not in creds_dict]
+            
+            return {
+                "status": "credentials_decoded",
+                "valid_json": True,
+                "has_all_required_fields": len(missing_fields) == 0,
+                "missing_fields": missing_fields if missing_fields else None,
+                "project_id": creds_dict.get("project_id"),
+                "client_email": creds_dict.get("client_email"),
+                "credential_type": creds_dict.get("type"),
+                "private_key_present": bool(creds_dict.get("private_key")),
+            }
+            
+        except base64.binascii.Error:
+            return {"error": "Invalid base64 encoding"}
+        except json.JSONDecodeError:
+            return {"error": "Invalid JSON after base64 decode"}
+            
     except Exception as e:
-        return {"status": "error", "details": str(e)}
+        return {"error": f"Unexpected error: {str(e)}"}
+    
+@app.get("/health")
+async def health_check():
+    logger.info("Starting health check...")
+    status = {
+        "timestamp": datetime.now().isoformat(),
+        "components": {},
+        "debug_info": {}  # Add debug info
+    }
+    
+    # Check Firebase Authentication
+    try:
+        app = firebase_admin.get_app()
+        project_id = app.project_id
+        status["components"]["firebase_auth"] = {
+            "status": "ok",
+            "project_id": project_id
+        }
+    except Exception as e:
+        logger.error(f"Firebase auth check failed: {str(e)}")
+        status["components"]["firebase_auth"] = {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    # Check Firestore Connection
+    try:
+        db.collection('test').limit(1).get()
+        status["components"]["firestore"] = {
+            "status": "ok"
+        }
+    except Exception as e:
+        logger.error(f"Firestore check failed: {str(e)}")
+        status["components"]["firestore"] = {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    # Check AI Services
+    try:
+        if os.getenv("GEMINI_API_KEY"):
+            gemini_key_exists = True
+            status["components"]["gemini"] = {
+                "status": "ok"
+            }
+        else:
+            gemini_key_exists = False
+            status["components"]["gemini"] = {
+                "status": "error",
+                "error": "API key not found"
+            }
+            
+        if os.getenv("GROQ_API_KEY"):
+            groq_key_exists = True
+            status["components"]["groq"] = {
+                "status": "ok"
+            }
+        else:
+            groq_key_exists = False
+            status["components"]["groq"] = {
+                "status": "error",
+                "error": "API key not found"
+            }
+            
+    except Exception as e:
+        logger.error(f"AI services check failed: {str(e)}")
+        status["components"]["ai_services"] = {
+            "status": "error",
+            "error": str(e)
+        }
 
+    # Collect all component statuses for debugging
+    all_statuses = [
+        comp.get("status")
+        for comp in status["components"].values()
+    ]
+    
+    # Add debug information
+    status["debug_info"] = {
+        "all_statuses": all_statuses,
+        "components_checked": list(status["components"].keys()),
+        "has_error": "error" in all_statuses
+    }
+    
+    # Set overall status
+    status["status"] = "error" if "error" in all_statuses else "ok"
+    
+    # Log the final status
+    logger.info(f"Health check complete. Status: {status['status']}")
+    logger.info(f"Component statuses: {all_statuses}")
+    
+    return status
 # ========== STARTUP ==========
 @app.get("/")
 async def root():
