@@ -3,7 +3,7 @@ import hashlib
 import os
 import json
 import random
-#from dotenv import load_dotenv
+from dotenv import load_dotenv
 import httpx
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
@@ -13,7 +13,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from groq import Groq
 from typing import List, Dict
-#load_dotenv()
+load_dotenv()
 import uvicorn
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -273,12 +273,11 @@ async def test_firebase():
         return {"status": "error", "details": str(e)}
 
 # ========== STARTUP ==========
-# In your main.py, change:
 @app.get("/")
 async def root():
     return {"message": "Hello from Railway!"}
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    logging.info(f"Binding to port {port}")
+    port = int(os.getenv("PORT", 8080))  # Railway sets the PORT dynamically
+    logging.info(f"Starting FastAPI on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
