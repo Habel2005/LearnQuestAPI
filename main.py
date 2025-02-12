@@ -3,6 +3,7 @@ import hashlib
 import os
 import json
 import random
+#from dotenv import load_dotenv
 import httpx
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
@@ -12,7 +13,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from groq import Groq
 from typing import List, Dict
-
+#load_dotenv()
 import uvicorn
 
 # ========== INITIALIZATION ==========
