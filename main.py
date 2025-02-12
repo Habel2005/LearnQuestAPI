@@ -19,10 +19,10 @@ app = FastAPI()
 private_key = os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n')
 
 firebase_cred = credentials.Certificate({
-    "type": os.getenv("FIREBASE_TYPE"),
+    "type": "service_account",
     "project_id": os.getenv("FIREBASE_PROJECT_ID"),
     "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
-    "private_key": private_key,  # Use the corrected key
+    "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace('\\n', '\n'),
     "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
     "client_id": os.getenv("FIREBASE_CLIENT_ID"),
     "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
@@ -266,6 +266,14 @@ async def get_all_categories():
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
+@app.get("/test-firebase")
+async def test_firebase():
+    try:
+        docs = db.collection('test').stream()
+        return {"status": "connected", "count": len(list(docs))}
+    except Exception as e:
+        return {"status": "error", "details": str(e)}
 
 # ========== STARTUP ==========
 # In your main.py, change:
