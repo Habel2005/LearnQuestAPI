@@ -3,6 +3,8 @@ import hashlib
 import os
 import json
 import random
+import sys
+import traceback
 from dotenv import load_dotenv
 import httpx
 from datetime import datetime
@@ -16,25 +18,55 @@ from typing import List, Dict
 load_dotenv()
 import uvicorn
 import logging
-logging.basicConfig(level=logging.INFO)
-
-logging.info("Starting FastAPI app...")
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # ========== INITIALIZATION ==========
-app = FastAPI()
-firebase_creds_b64 = os.getenv("FIREBASE_CREDENTIALS_BASE64")
+try:
+    load_dotenv()
+    logger.info("Starting FastAPI app initialization...")
+    
+    # Initialize FastAPI
+    app = FastAPI()
+    
+    # Firebase initialization with error handling
+    firebase_creds_b64 = os.getenv("FIREBASE_CREDENTIALS_BASE64")
+    if not firebase_creds_b64:
+        logger.error("FIREBASE_CREDENTIALS_BASE64 environment variable is missing")
+        raise ValueError("Firebase credentials are required")
+        
+    try:
+        creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
+        firebase_cred = credentials.Certificate(json.loads(creds_json))
+        firebase_admin.initialize_app(firebase_cred)
+        db = firestore.client()
+        logger.info("Firebase initialized successfully")
+    except Exception as e:
+        logger.error(f"Firebase initialization failed: {str(e)}")
+        raise
 
-if firebase_creds_b64:
-    creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
-    firebase_cred = credentials.Certificate(json.loads(creds_json))
-    firebase_admin.initialize_app(firebase_cred)
-    db = firestore.client()
+    # AI Configuration with error handling
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    groq_key = os.getenv("GROQ_API_KEY")
+    
+    if not gemini_key:
+        logger.error("GEMINI_API_KEY environment variable is missing")
+        raise ValueError("Gemini API key is required")
+    if not groq_key:
+        logger.error("GROQ_API_KEY environment variable is missing")
+        raise ValueError("Groq API key is required")
+        
+    genai.configure(api_key=gemini_key)
+    gemini = genai.GenerativeModel('gemini-pro')
+    groq = Groq(api_key=groq_key)
+    logger.info("AI services initialized successfully")
 
-# AI Configuration
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-gemini = genai.GenerativeModel('gemini-pro')
-groq = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
+except Exception as e:
+    logger.error(f"Startup failed: {str(e)}\n{traceback.format_exc()}")
+    sys.exit(1)
 # ========== DATA MODELS ==========
 class DailyLearningPath(BaseModel):
     title: str
@@ -262,7 +294,35 @@ async def get_all_categories():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+    try:
+        # Test Firebase connection
+        db.collection('test').limit(1).get()
+        
+        # Test AI services
+        gemini_ok = bool(gemini)
+        groq_ok = bool(groq)
+        
+        return {
+            "status": "ok",
+            "timestamp": datetime.now().isoformat(),
+            "firebase_connected": True,
+            "gemini_available": gemini_ok,
+            "groq_available": groq_ok,
+            "environment": {
+                "firebase_creds": bool(os.getenv("FIREBASE_CREDENTIALS_BASE64")),
+                "gemini_key": bool(os.getenv("GEMINI_API_KEY")),
+                "groq_key": bool(os.getenv("GROQ_API_KEY")),
+                "youtube_key": bool(os.getenv("YOUTUBE_API_KEY")),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
 
 @app.get("/test-firebase")
 async def test_firebase():
@@ -278,6 +338,11 @@ async def root():
     return {"message": "Hello from Railway!"}
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8080))  
-    print(f"🚀 Starting FastAPI on port {port}...")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    port = int(os.getenv("PORT", "8080"))
+    logger.info(f"🚀 Starting FastAPI on port {port}...")
+    try:
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    except Exception as e:
+        logger.error(f"Failed to start server: {str(e)}\n{traceback.format_exc()}")
+        sys.exit(1)
