@@ -457,12 +457,7 @@ async def health_check():
 async def root():
     return {"message": "Hello from Railway!"}
 
+# Ensure you're using Railway's PORT environment variable
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8080"))
-    logger.info(f"🚀 Starting FastAPI on port {port}...")
-    try:
-        import uvicorn
-        uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
-    except Exception as e:
-        logger.error(f"Failed to start server: {str(e)}\n{traceback.format_exc()}")
-        sys.exit(1)
+    port = int(os.environ.get("PORT", 8080))  # Always use environment PORT
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
