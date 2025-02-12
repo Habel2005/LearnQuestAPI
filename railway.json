@@ -1,12 +1,7 @@
 {
   "build": {
     "nixpacksPlan": {
-      "providers": [
-        {
-          "name": "python",
-          "version": "3.10"
-        }
-      ]
+      "providers": ["python"]
     }
   },
   "deploy": {
