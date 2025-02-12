@@ -12,6 +12,8 @@ from firebase_admin import credentials, firestore
 from groq import Groq
 from typing import List, Dict
 
+import uvicorn
+
 # ========== INITIALIZATION ==========
 app = FastAPI()
 
@@ -277,6 +279,10 @@ async def test_firebase():
 
 # ========== STARTUP ==========
 # In your main.py, change:
+@app.get("/")
+async def root():
+    return {"message": "Hello from Railway!"}
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    port = int(os.getenv("PORT", 8000))  # Use Railway's PORT or default to 8000
+    uvicorn.run(app, host="0.0.0.0", port=port)
