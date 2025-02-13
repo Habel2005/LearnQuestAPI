@@ -230,12 +230,14 @@ class CategoryService:
     @staticmethod
     async def get_all_categories() -> List[Dict]:
         categories_ref = db.collection("categories")
-        docs = [doc async for doc in categories_ref.stream()]
-        return [{
-            "name": doc.get("name"),
-            "color": _get_category_color(doc.get("name")),
-            "image": f"assets/card{random.randint(1, 4)}.jpg"
-        } for doc in docs]
+        docs = []
+        async for doc in categories_ref.stream(): 
+            docs.append({
+                "name": doc.get("name"),
+                "color": _get_category_color(doc.get("name")),
+                "image": f"assets/card{random.randint(1, 4)}.jpg"
+            })
+        return docs
 
 # ========== UTILITY FUNCTIONS ==========
 def _get_category_color(category_name: str) -> str:
