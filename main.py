@@ -1212,7 +1212,7 @@ async def generate_learning_path(user_id: str):
     user_data = user_ref.get().to_dict()
     return await LearningPathService.generate_paths(user_data)
 
-@app.get("/api/daily-challenges")
+@app.get("/daily-challenges")
 async def get_daily_challenges(userId: str = Query(..., description="User ID")):
     """Get personalized daily challenges (from daily.py)"""
     # Get user document
