@@ -72,9 +72,9 @@ except Exception as e:
     sys.exit(1)
 
 # Constants for APIs
-YOUTUBE_API_KEY = "YOUR_YOUTUBE_API_KEY"
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
-GITHUB_TOKEN = "YOUR_GITHUB_TOKEN"
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GITHUB_TOKEN = os.getenv("GITHUB_API_KEY")
 
 # Difficulty mapping for personalization
 DIFFICULTY_MAPPING = {
