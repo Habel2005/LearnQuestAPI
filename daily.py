@@ -41,65 +41,75 @@ DIFFICULTY_MAPPING = {
     "Advanced": ["advanced", "hard", "expert"]
 }
 
-def get_daily_challenges():
-    """Get personalized daily challenges for a user."""
-    user_id = request.args.get('userId')
-    if not user_id:
-        return jsonify({"error": "User ID is required"}), 400
+def get_daily_challenges(user_id):
+    """Get personalized daily challenges for a user and store them in Firestore."""
+    # Validate user
+    user_ref = db.collection('users').document(user_id)
+    user_doc = user_ref.get()
     
-    # Get user preferences from Firebase
-    user_doc = db.collection('users').document(user_id).get()
     if not user_doc.exists:
         return jsonify({"error": "User not found"}), 404
-    
+
     user_data = user_doc.to_dict()
     preferences = user_data.get('preferences', {})
+    
+    # Extract preferences
     interests = preferences.get('interests', [])
     skill_level = preferences.get('skillLevel', 'Beginner')
     learning_style = preferences.get('learningStyle', 'Videos')
     daily_commitment = preferences.get('dailyCommitment', '15 minutes')
-    
-    # Determine the number and complexity of challenges based on commitment
-    if daily_commitment == '15 minutes':
-        num_challenges = 1
-    elif daily_commitment == '30 minutes':
-        num_challenges = 2
-    else:  # '1 hour or more'
-        num_challenges = 3
-    
-    # Generate challenges based on user preferences
+
+    # Determine number of challenges
+    num_challenges = get_num_challenges(daily_commitment)
+
+    # Generate challenges
     challenges = []
     
-    # Add coding challenge
+    # Coding challenge
     coding_challenge = generate_coding_challenge(interests, skill_level)
     if coding_challenge:
         challenges.append(coding_challenge)
     
-    # Add learning challenge based on learning style
+    # Learning challenge
     learning_challenge = generate_learning_challenge(interests, skill_level, learning_style)
     if learning_challenge:
         challenges.append(learning_challenge)
     
-    # Add project challenge for more committed users
+    # Project challenge (only if commitment is high)
     if num_challenges >= 3:
         project_challenge = generate_project_challenge(interests, skill_level)
         if project_challenge:
             challenges.append(project_challenge)
     
-    # Add a knowledge quiz for all users
+    # Quiz challenge
     quiz_challenge = generate_quiz_challenge(interests, skill_level)
     if quiz_challenge:
         challenges.append(quiz_challenge)
-    
-    # Limit to the required number of challenges
+
+    # Limit challenges to daily commitment
     challenges = challenges[:num_challenges]
-    
+
+    # Store in Firestore under `users/{userId}/daily_challenges`
+    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
+    daily_challenges_ref.set({
+        "challenges": challenges,
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "streakCount": get_user_streak(user_id),
+        "completedToday": get_completed_challenges_today(user_id)
+    })
+
     return jsonify({
         "challenges": challenges,
         "date": datetime.now().strftime("%Y-%m-%d"),
         "streakCount": get_user_streak(user_id),
         "completedToday": get_completed_challenges_today(user_id)
     })
+
+def get_num_challenges(commitment: str) -> int:
+    """Determine the number of challenges based on daily commitment"""
+    if commitment == '15 minutes': return 1
+    if commitment == '30 minutes': return 2
+    return 3
 
 def generate_coding_challenge(interests, skill_level):
     """Generate a coding challenge based on user interests and skill level."""
