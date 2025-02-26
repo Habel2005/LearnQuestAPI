@@ -32,17 +32,8 @@ try:
     # Initialize FastAPI
     app = FastAPI()
     
-    # Firebase initialization with error handling
-    firebase_creds_b64 = os.getenv("FIREBASE_CREDENTIALS_BASE64")
-    if not firebase_creds_b64:
-        logger.error("FIREBASE_CREDENTIALS_BASE64 environment variable is missing")
-        raise ValueError("Firebase credentials are required")
         
     try:
-        creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
-        firebase_cred = credentials.Certificate(json.loads(creds_json))
-        firebase_admin.initialize_app(firebase_cred)
-        db = firestore.client()
         logger.info("Firebase initialized successfully")
     except Exception as e:
         logger.error(f"Firebase initialization failed: {str(e)}")
