@@ -11,16 +11,20 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import googleapiclient.discovery
 from datetime import datetime
+import firebase_admin
+from firebase_admin import credentials, firestore
 
+# Check if Firebase is already initialized
+if not firebase_admin._apps:
+    firebase_creds_b64 = os.getenv("FIREBASE_CREDENTIALS_BASE64")
+    if not firebase_creds_b64:
+        raise ValueError("Firebase credentials are required")
+            
+    creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
+    firebase_cred = credentials.Certificate(json.loads(creds_json))
+    
+    firebase_admin.initialize_app(firebase_cred)  
 
-# Firebase initialization
-firebase_creds_b64 = os.getenv("FIREBASE_CREDENTIALS_BASE64")
-if not firebase_creds_b64:
-    raise ValueError("Firebase credentials are required")
-        
-creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
-firebase_cred = credentials.Certificate(json.loads(creds_json))
-firebase_admin.initialize_app(firebase_cred)
 db = firestore.client()
 
 # Constants for APIs
