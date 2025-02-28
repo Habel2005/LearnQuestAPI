@@ -1,4 +1,5 @@
 import base64
+import logging
 import re
 import os
 from flask import jsonify, request
@@ -91,12 +92,17 @@ def get_daily_challenges(user_id):
 
     # Store in Firestore under `users/{userId}/daily_challenges`
     daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
-    daily_challenges_ref.set({
-        "challenges": challenges,
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "streakCount": get_user_streak(user_id),
-        "completedToday": get_completed_challenges_today(user_id)
-    })
+    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
+    try:
+            daily_challenges_ref.set({
+                "challenges": challenges,
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "streakCount": get_user_streak(user_id),
+                "completedToday": get_completed_challenges_today(user_id)
+            })
+            logging.info("Daily challenges stored for user: {}".format(user_id))
+    except Exception as e:
+            logging.error("Error storing daily challenges for user {}: {}".format(user_id, str(e)))
 
     return jsonify({
         "challenges": challenges,
@@ -112,19 +118,22 @@ def get_num_challenges(commitment: str) -> int:
     return 3
 
 def generate_coding_challenge(interests, skill_level):
-    """Generate a coding challenge based on user interests and skill level."""
-    # Try to fetch from GitHub first
-    challenge = fetch_github_challenge(interests, skill_level)
+    """Generate a coding challenge using a random method."""
     
-    # Fallback to LeetCode or similar platforms
-    if not challenge:
-        challenge = fetch_leetcode_challenge(skill_level)
+    fetch_methods = [
+        lambda: fetch_github_challenge(interests, skill_level),
+        lambda: fetch_leetcode_challenge(skill_level),
+        lambda: generate_ai_coding_challenge(interests, skill_level)
+    ]
     
-    # Generate with AI as last resort
-    if not challenge:
-        challenge = generate_ai_coding_challenge(interests, skill_level)
+    random.shuffle(fetch_methods)  # Shuffle to randomize order
     
-    return challenge
+    for method in fetch_methods:
+        challenge = method()
+        if challenge:
+            return challenge  # Return the first successful result
+    
+    return "No challenge found. Please try again later."
 
 def fetch_github_challenge(interests, skill_level):
     """Fetch a coding challenge from GitHub repositories."""
