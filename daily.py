@@ -92,7 +92,6 @@ def get_daily_challenges(user_id):
 
     # Store in Firestore under `users/{userId}/daily_challenges`
     daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
-    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
     try:
             daily_challenges_ref.set({
                 "challenges": challenges,
@@ -101,8 +100,10 @@ def get_daily_challenges(user_id):
                 "completedToday": get_completed_challenges_today(user_id)
             })
             logging.info("Daily challenges stored for user: {}".format(user_id))
+            print('okay')
     except Exception as e:
             logging.error("Error storing daily challenges for user {}: {}".format(user_id, str(e)))
+            print('ohh')
 
     return jsonify({
         "challenges": challenges,
