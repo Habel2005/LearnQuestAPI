@@ -100,16 +100,17 @@ def get_daily_challenges(user_id):
                 "completedToday": get_completed_challenges_today(user_id)
             })
             logging.info("Daily challenges stored for user: {}".format(user_id))
-            print('okay')
+            s='good'
     except Exception as e:
             logging.error("Error storing daily challenges for user {}: {}".format(user_id, str(e)))
-            print('ohh')
+            s='bad'
 
     return jsonify({
         "challenges": challenges,
         "date": datetime.now().strftime("%Y-%m-%d"),
         "streakCount": get_user_streak(user_id),
-        "completedToday": get_completed_challenges_today(user_id)
+        "completedToday": get_completed_challenges_today(user_id),
+        "oh":s
     })
 
 def get_num_challenges(commitment: str) -> int:
