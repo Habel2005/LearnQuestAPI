@@ -2,6 +2,7 @@ import base64
 import logging
 import re
 import os
+from fastapi import HTTPException
 from flask import jsonify, request
 import requests
 import random
@@ -49,7 +50,7 @@ def get_daily_challenges(user_id):
     user_doc = user_ref.get()
     
     if not user_doc.exists:
-        return jsonify({"error": "User not found"}), 404
+        raise HTTPException(status_code=404, detail="User not found")
 
     user_data = user_doc.to_dict()
     preferences = user_data.get('preferences', {})
@@ -105,13 +106,13 @@ def get_daily_challenges(user_id):
             logging.error("Error storing daily challenges for user {}: {}".format(user_id, str(e)))
             s='bad'
 
-    return jsonify({
+    return {
         "challenges": challenges,
         "date": datetime.now().strftime("%Y-%m-%d"),
         "streakCount": get_user_streak(user_id),
         "completedToday": get_completed_challenges_today(user_id),
         "oh":s
-    })
+    }
 
 def get_num_challenges(commitment: str) -> int:
     """Determine the number of challenges based on daily commitment"""
