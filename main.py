@@ -335,52 +335,7 @@ async def generate_learning_path(user_id: str):
 @app.get("/daily-challenges")
 async def get_daily_challenges(userId: str = Query(..., description="User ID")):
     """Get personalized daily challenges (from daily.py)"""
-    # Get user document
-    user_ref = db.collection('users').document(userId)
-    user_doc = user_ref.get()
-    
-    if not user_doc.exists:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    user_data = user_doc.to_dict()
-    preferences = user_data.get('preferences', {})
-    
-    # Extract preferences
-    interests = preferences.get('interests', [])
-    skill_level = preferences.get('skillLevel', 'Beginner')
-    learning_style = preferences.get('learningStyle', 'Videos')
-    daily_commitment = preferences.get('dailyCommitment', '15 minutes')
-
-    # Generate challenges (using your existing daily.py logic)
-    challenges = []
-    
-    # Coding challenge
-    coding_challenge = generate_coding_challenge(interests, skill_level)
-    if coding_challenge:
-        challenges.append(coding_challenge)
-    
-    # Learning challenge
-    learning_challenge = generate_learning_challenge(interests, skill_level, learning_style)
-    if learning_challenge:
-        challenges.append(learning_challenge)
-    
-    # Project challenge
-    if get_num_challenges(daily_commitment) >= 3:
-        project_challenge = generate_project_challenge(interests, skill_level)
-        if project_challenge:
-            challenges.append(project_challenge)
-    
-    # Quiz challenge
-    quiz_challenge = generate_quiz_challenge(interests, skill_level)
-    if quiz_challenge:
-        challenges.append(quiz_challenge)
-    
-    return {
-        "challenges": challenges[:get_num_challenges(daily_commitment)],
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "streakCount": get_user_streak(userId),
-        "completedToday": get_completed_challenges_today(userId)
-    }
+    return get_daily_challenges(userId)
 
 def get_num_challenges(commitment: str) -> int:
     if commitment == '15 minutes': return 1
