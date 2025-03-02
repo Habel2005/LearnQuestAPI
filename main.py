@@ -1,9 +1,5 @@
-import base64
-import hashlib
 import os
-import json
 import random
-import json
 import sys
 import traceback
 from dotenv import load_dotenv
@@ -12,9 +8,9 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 import google.generativeai as genai
-from datetime import datetime, timedelta
+from datetime import datetime
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import firestore
 from groq import Groq
 from typing import List, Dict
 from daily import *
@@ -110,14 +106,6 @@ class CategoryService:
         } for category, color in zip(CategoryService.CATEGORIES, CategoryService.COLORS)]
 
 # ========== DATA MODELS ==========
-class DailyLearningPath(BaseModel):
-    title: str
-    duration: str
-    resource_count: str
-    components: List[str]
-    difficulty: str
-    tags: List[str]
-
 class TopRatedCourse(BaseModel):
     title: str
     duration: str
@@ -125,13 +113,6 @@ class TopRatedCourse(BaseModel):
     learners: str
     tech_stack: List[str]
     image_url: str
-
-class CategoryTile(BaseModel):
-    title: str
-    subtitle: str
-    icon: str
-    gradient: List[str]
-    active_count: str
 
 # ========== CORE SERVICES ==========
 class HomepageService:
@@ -141,70 +122,10 @@ class HomepageService:
         user_data = (await user_ref.get()).to_dict()
         
         return {
-            "daily_learning_paths": await LearningPathService.generate_paths(user_data),
             "top_rated_courses": await CourseService.get_top_rated(),
-            "category_tiles": CategoryService.get_category_tiles(),
             "categories": await CategoryService.get_categories()
         }
 
-class LearningPathService:
-    @staticmethod
-    async def generate_paths(self,user_data: Dict) -> List[Dict]:
-        try:
-            prompt = f"""Generate 3 learning paths in JSON format for {user_data['profile']['fullName']} with:
-            - Skill Level: {user_data['preferences']['skillLevel']}
-            - Interests: {', '.join(user_data['preferences']['interests'])}
-            - Learning Style: {user_data['preferences']['learningStyle']}
-            
-            Format:
-            {{
-                "paths": [
-                    {{
-                        "title": "AI-Generated Python Fundamentals",
-                        "duration": "2-3h",
-                        "resource_count": "15+ resources",
-                        "components": ["Interactive Exercises", "Video Tutorials"],
-                        "difficulty": "Beginner",
-                        "tags": ["Programming", "Python"]
-                    }}
-                ]
-            }}"""
-            
-            response = groq.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="mixtral-8x7b-32768",
-                response_format={"type": "json_object"}
-            )
-            data = json.loads(response.choices[0].message.content)
-            return await self._add_progress(data["paths"], user_data["uid"])
-            
-        except Exception as e:
-            print(f"Path generation error: {e}")
-            return self._get_fallback_paths()
-
-    @staticmethod
-    async def _add_progress(paths: List[Dict], user_id: str) -> List[Dict]:
-        progress_ref = db.collection("users").document(user_id).collection("progress")
-        progress_doc = await progress_ref.document("learning_paths").get()
-        progress_data = progress_doc.to_dict() or {}
-        
-        for path in paths:
-            path_id = hashlib.md5(path["title"].encode()).hexdigest()
-            path["progress"] = f"{progress_data.get(path_id, 0)}/{path['resource_count'].split('+')[0]}"
-            
-        return paths
-
-    @staticmethod
-    def _get_fallback_paths() -> List[Dict]:
-        return [{
-            "title": "Python Fundamentals",
-            "duration": "2-3h",
-            "resource_count": "15+ resources",
-            "components": ["Interactive Exercises", "Documentation"],
-            "difficulty": "Beginner",
-            "tags": ["Programming", "Python"],
-            "progress": "0/15"
-        }]
 
 class CourseService:
     @staticmethod
@@ -238,27 +159,6 @@ class CourseService:
         return (await fav_ref.get()).exists
 
 class CategoryService:
-    @staticmethod
-    def get_category_tiles() -> List[Dict]:
-        return [
-            {
-                "title": "Daily Challenges",
-                "subtitle": "Hands-on coding tasks",
-                "icon": "flash_on",
-                "gradient": ["#4285F4", "#8AB4F8"],
-                "active_count": "3 new today",
-                "route": "/daily-challenges"
-            },
-            {
-                "title": "Quick Learn",
-                "subtitle": "Bite-sized tech concepts",
-                "icon": "lightbulb_outline",
-                "gradient": ["#9C27B0", "#E1BEE7"],
-                "active_count": "12 concepts",
-                "route": "/quick-learn"
-            },
-            # Add other tiles similarly
-        ]
 
     @staticmethod
     async def get_categories(limit: int = 3) -> List[Dict]:
@@ -320,17 +220,10 @@ async def get_home_data(user_id: str):
     user_data = (await user_ref.get()).to_dict()
     
     return {
-        "daily_learning_paths": await LearningPathService.generate_paths(user_data),
-        "top_rated_courses": await CourseService.get_top_rated(user_id),
-        "category_tiles": CategoryService.get_category_tiles(),
+        # "top_rated_courses": await CourseService.get_top_rated(user_id),
         "categories": await CategoryService.get_categories()
     }
 
-@app.post("/generate-learning-path")
-async def generate_learning_path(user_id: str):
-    user_ref = db.collection("users").document(user_id)
-    user_data = user_ref.get().to_dict()
-    return await LearningPathService.generate_paths(user_data)
 
 @app.get("/daily-challenges")
 async def daily_challenges(userId: str = Query(..., description="User ID")):
@@ -440,49 +333,6 @@ async def test_firebase_auth():
         }
 
     
-@app.get("/debug/firebase")
-async def debug_firebase():
-    try:
-        # Check if credentials exist
-        firebase_creds_b64 = os.getenv("FIREBASE_CREDENTIALS_BASE64")
-        if not firebase_creds_b64:
-            return {"error": "FIREBASE_CREDENTIALS_BASE64 environment variable is missing"}
-        
-        # Try decoding the base64
-        try:
-            creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
-            creds_dict = json.loads(creds_json)
-            
-            # Check for required fields
-            required_fields = [
-                "type", 
-                "project_id", 
-                "private_key_id", 
-                "private_key", 
-                "client_email"
-            ]
-            
-            missing_fields = [field for field in required_fields if field not in creds_dict]
-            
-            return {
-                "status": "credentials_decoded",
-                "valid_json": True,
-                "has_all_required_fields": len(missing_fields) == 0,
-                "missing_fields": missing_fields if missing_fields else None,
-                "project_id": creds_dict.get("project_id"),
-                "client_email": creds_dict.get("client_email"),
-                "credential_type": creds_dict.get("type"),
-                "private_key_present": bool(creds_dict.get("private_key")),
-            }
-            
-        except base64.binascii.Error:
-            return {"error": "Invalid base64 encoding"}
-        except json.JSONDecodeError:
-            return {"error": "Invalid JSON after base64 decode"}
-            
-    except Exception as e:
-        return {"error": f"Unexpected error: {str(e)}"}
-    
 @app.get("/health")
 async def health_check():
     logger.info("Starting health check...")
@@ -578,4 +428,3 @@ async def health_check():
 @app.get("/")
 async def root():
     return {"message": "Hello from Railway!"}
-
