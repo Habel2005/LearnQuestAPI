@@ -158,61 +158,6 @@ class CourseService:
         fav_ref = db.collection("users").document(user_id).collection("favorites").document(course_id)
         return (await fav_ref.get()).exists
 
-class CategoryService:
-
-    @staticmethod
-    async def get_categories(limit: int = 3) -> List[Dict]:
-        categories_ref = db.collection("categories")
-        docs = [doc async for doc in categories_ref.limit(limit).stream()]
-        
-        return [{
-            "name": doc.get("name"),
-            "color": _get_category_color(doc.get("name")),
-            "image": f"assets/card{random.randint(1, 4)}.jpg"
-        } for doc in docs]
-
-    @staticmethod
-    async def get_all_categories() -> List[Dict]:
-        categories_ref = db.collection("categories")
-        docs = []
-        async for doc in categories_ref.stream(): 
-            docs.append({
-                "name": doc.get("name"),
-                # "color": _get_category_color(doc.get("name")),
-                # "image": f"assets/card{random.randint(1, 4)}.jpg"
-            })
-        return docs
-
-# ========== UTILITY FUNCTIONS ==========
-def _get_category_color(category_name: str) -> str:
-    color_map = {
-        "Business": "#4285F4",
-        "Technology": "#9C27B0",
-        "Digital Marketing": "#34A853"
-    }
-    return color_map.get(category_name, "#B0BEC5")
-
-async def fetch_youtube_videos(topic: str) -> List[Dict]:
-    cached = db.collection("youtube_cache").document(topic).get()
-    if cached.exists:
-        return cached.to_dict().get("videos", [])
-    
-    api_key = os.getenv("YOUTUBE_API_KEY")
-    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={topic}&key={api_key}"
-    
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        videos = [
-            {
-                "title": item["snippet"]["title"],
-                "url": f"https://youtu.be/{item['id']['videoId']}",
-                "duration": "N/A"
-            } for item in response.json().get("items", [])
-        ]
-        
-        db.collection("youtube_cache").document(topic).set({"videos": videos})
-        return videos
-
 # ========== API ENDPOINTS ==========
 @app.get("/home/{user_id}")
 async def get_home_data(user_id: str):
