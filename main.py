@@ -79,11 +79,23 @@ class CategoryService:
     ]
     
     # Color palette for categories
-    COLORS = [
-        "#4285F4", "#34A853", "#FBBC05", "#EA4335",  # Google colors
-        "#9C27B0", "#673AB7", "#3F51B5", "#2196F3",  # Purple/Blue
-        "#009688", "#4CAF50", "#8BC34A", "#CDDC39",  # Green
-        "#FFC107", "#FF9800", "#FF5722", "#795548"   # Orange/Brown
+    COLOR_GRADIENTS = [
+        ["#4285F4", "#7BAAF7"],  # Blue Gradient
+        ["#34A853", "#66BB6A"],  # Green Gradient
+        ["#FBBC05", "#FFD54F"],  # Yellow Gradient
+        ["#EA4335", "#EF5350"],  # Red Gradient
+        ["#9C27B0", "#BA68C8"],  # Purple Gradient
+        ["#673AB7", "#9575CD"],  # Deep Purple Gradient
+        ["#3F51B5", "#7986CB"],  # Indigo Gradient
+        ["#2196F3", "#64B5F6"],  # Light Blue Gradient
+        ["#009688", "#4DB6AC"],  # Teal Gradient
+        ["#4CAF50", "#81C784"],  # Green Gradient
+        ["#8BC34A", "#AED581"],  # Light Green Gradient
+        ["#CDDC39", "#DCE775"],  # Lime Gradient
+        ["#FFC107", "#FFCA28"],  # Amber Gradient
+        ["#FF9800", "#FFB74D"],  # Orange Gradient
+        ["#FF5722", "#FF8A65"],  # Deep Orange Gradient
+        ["#795548", "#A1887F"]   # Brown Gradient
     ]
 
     @staticmethod
@@ -92,7 +104,7 @@ class CategoryService:
         selected = random.sample(range(len(CategoryService.CATEGORIES)), limit)
         return [{
             "name": CategoryService.CATEGORIES[i],
-            "color": CategoryService.COLORS[i],
+            "color": CategoryService.COLOR_GRADIENTS[i],
             "image": f"assets/card{random.randint(1, 4)}.jpg"
         } for i in selected]
 
@@ -101,9 +113,9 @@ class CategoryService:
         """Get all categories for the view all page"""
         return [{
             "name": category,
-            "color": color,
+            "gradient_colors": color,
             "image": f"assets/card{random.randint(1, 4)}.jpg"
-        } for category, color in zip(CategoryService.CATEGORIES, CategoryService.COLORS)]
+        } for category, color in zip(CategoryService.CATEGORIES, CategoryService.COLOR_GRADIENTS)]
 
 # ========== DATA MODELS ==========
 class TopRatedCourse(BaseModel):
