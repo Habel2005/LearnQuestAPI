@@ -249,8 +249,8 @@ def get_num_challenges(commitment: str) -> int:
     return 3
 
 @app.get("/categories")
-def fetch_categories(limit: int = 3):
-    return CategoryService.get_categories(limit)
+async def fetch_categories(limit: int = 3):
+    return await CategoryService.get_categories(limit)
 
 @app.get("/categories/all")
 async def get_all_categories():
