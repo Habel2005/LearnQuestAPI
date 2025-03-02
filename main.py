@@ -178,8 +178,8 @@ class CategoryService:
         async for doc in categories_ref.stream(): 
             docs.append({
                 "name": doc.get("name"),
-                "color": _get_category_color(doc.get("name")),
-                "image": f"assets/card{random.randint(1, 4)}.jpg"
+                # "color": _get_category_color(doc.get("name")),
+                # "image": f"assets/card{random.randint(1, 4)}.jpg"
             })
         return docs
 
