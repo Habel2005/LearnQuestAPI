@@ -171,16 +171,6 @@ class CourseService:
         return (await fav_ref.get()).exists
 
 # ========== API ENDPOINTS ==========
-@app.get("/home/{user_id}")
-async def get_home_data(user_id: str):
-    user_ref = db.collection("users").document(user_id)
-    user_data = (await user_ref.get()).to_dict()
-    
-    return {
-        # "top_rated_courses": await CourseService.get_top_rated(user_id),
-        "categories": await CategoryService.get_categories()
-    }
-
 
 @app.get("/daily-challenges")
 async def daily_challenges(userId: str = Query(..., description="User ID")):
@@ -257,6 +247,10 @@ def get_num_challenges(commitment: str) -> int:
     if commitment == '15 minutes': return 1
     if commitment == '30 minutes': return 2
     return 3
+
+@app.get("/categories")
+def fetch_categories(limit: int = 3):
+    return CategoryService.get_categories(limit)
 
 @app.get("/categories/all")
 async def get_all_categories():
