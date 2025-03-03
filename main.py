@@ -5,7 +5,7 @@ import traceback
 from dotenv import load_dotenv
 import httpx
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query,Request
 from pydantic import BaseModel
 import google.generativeai as genai
 from datetime import datetime
@@ -14,6 +14,7 @@ from firebase_admin import firestore
 from groq import Groq
 from typing import List, Dict
 from daily import *
+from course import *
 load_dotenv()
 import logging
 
@@ -127,18 +128,6 @@ class TopRatedCourse(BaseModel):
     image_url: str
 
 # ========== CORE SERVICES ==========
-class HomepageService:
-    @staticmethod
-    async def get_homepage_data(user_id: str) -> Dict:
-        user_ref = db.collection("users").document(user_id)
-        user_data = (await user_ref.get()).to_dict()
-        
-        return {
-            "top_rated_courses": await CourseService.get_top_rated(),
-            "categories": await CategoryService.get_categories()
-        }
-
-
 class CourseService:
     @staticmethod
     async def get_top_rated(self,user_id: str) -> List[Dict]:
@@ -171,7 +160,6 @@ class CourseService:
         return (await fav_ref.get()).exists
 
 # ========== API ENDPOINTS ==========
-
 @app.get("/daily-challenges")
 async def daily_challenges(userId: str = Query(..., description="User ID")):
     """Get personalized daily challenges """
@@ -256,8 +244,58 @@ async def fetch_categories(limit: int = 3):
 async def get_all_categories():
     return await CategoryService.get_all_categories()
 
+@app.post("/courses/search")
+async def search_course(request: Request):
+    """
+    Endpoint to search for an existing course or generate a new one.
+    Expects a JSON body with 'search_query', 'user_id', and optional 'generate_new' boolean.
+    """
+    data = await request.json()
+    search_query = data.get("search_query")
+    user_id = data.get("user_id")
+    generate_new = data.get("generate_new", False)
 
-@app.get("/debug/firebase-test")
+    if not search_query or not user_id:
+        raise HTTPException(status_code=400, detail="Both 'search_query' and 'user_id' are required.")
+
+    try:
+        course_summary = await search_or_generate_course(db, search_query, user_id, generate_new=generate_new)
+        return course_summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/courses/{course_id}")
+async def course_details(course_id: str):
+    """
+    Endpoint to get full details of a course by course_id.
+    """
+    try:
+        course_data = await get_course_details(db, course_id)
+        return course_data
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.post("/courses/{course_id}/progress")
+async def update_progress(course_id: str, request: Request):
+    """
+    Endpoint to update a user's progress on a given course lesson.
+    Expects a JSON body with 'user_id', 'lesson_id', and 'completed' status.
+    """
+    data = await request.json()
+    user_id = data.get("user_id")
+    lesson_id = data.get("lesson_id")
+    completed = data.get("completed", False)
+
+    if not user_id or not lesson_id:
+        raise HTTPException(status_code=400, detail="Both 'user_id' and 'lesson_id' are required.")
+
+    try:
+        progress = await update_course_progress(db, user_id, course_id, lesson_id, completed)
+        return progress
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/debug/firebase")
 async def test_firebase_auth():
     try:
         # 1. Get the current Firebase app
