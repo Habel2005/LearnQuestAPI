@@ -1,8 +1,10 @@
 import os
+from urllib.parse import urlparse
 import uuid
-import random
+from newspaper import Article
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from bs4 import BeautifulSoup
 import google.generativeai as genai
 from groq import Groq
 import requests
@@ -195,8 +197,8 @@ def generate_course_outline(
         for lesson in course_data.get("lessons", []):
             lesson["resources"] = get_youtube_resources(f"{query} {lesson['title']}", 2)
     elif learning_style == 'Articles':
-        # This would be implemented with a web search API
-        pass
+        for lesson in course_data.get("lessons", []):
+            lesson["resources"] = get_articles_resources(f"{query} {lesson['title']}", 2)
     elif learning_style == 'Step by Step Guides':
         for lesson in course_data.get("lessons", []):
             lesson["resources"] = get_github_resources(f"{query} {lesson['title']} tutorial", 2)
@@ -251,6 +253,108 @@ def get_github_resources(search_query: str, max_results: int = 2) -> List[Dict[s
     except Exception as e:
         print(f"Error fetching GitHub resources: {e}")
         return []
+
+def get_articles_resources(query: str, limit: int = 3) -> list:
+    """Search for articles and generate AI-powered summaries"""
+    try:
+        # Use Google search instead of Bing
+        search_url = "https://www.google.com/search"
+        params = {"q": query, "num": limit, "hl": "en"}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+
+        response = requests.get(search_url, params=params, headers=headers)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        results = []
+
+        # Extract Google search results
+        for result in soup.find_all("div", class_="tF2Cxc")[:limit]:
+            link = result.find("a")["href"]
+            title = result.find("h3").get_text(strip=True)
+            
+            # Get clean article content
+            article_content = extract_article_content(link)
+            
+            # Generate AI summary
+            summary = generate_ai_summary(article_content)
+            
+            results.append({
+                "type": "article",
+                "title": title,
+                "url": link,
+                "summary": summary,
+                "domain": get_domain(link)
+            })
+
+        return results
+
+    except Exception as e:
+        print(f"Error in article search: {e}")
+        return []
+
+def extract_article_content(url: str) -> str:
+    """Extract main article content using advanced parsing"""
+    try:
+        # Use newspaper3k for better content extraction
+        article = Article(url)
+        article.download()
+        article.parse()
+        
+        if article.text:
+            return f"{article.title}\n\n{article.text}"
+            
+        # Fallback to BeautifulSoup
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        # Advanced content cleaning
+        for element in soup(["script", "style", "nav", "footer", "aside"]):
+            element.decompose()
+            
+        text = " ".join([p.get_text(strip=True) for p in soup.find_all(["p", "h1", "h2", "h3"])])
+        return text[:10000]  # Limit content for API constraints
+
+    except Exception as e:
+        print(f"Content extraction failed: {e}")
+        return ""
+
+def generate_ai_summary(content: str, model: str = "gemini") -> str:
+    """Generate summary using either Groq (Mixtral) or Gemini"""
+    genai, groq_client = init_ai_models()
+    if not content:
+        return "Summary unavailable"
+
+    try:
+        if model == "groq":
+            # Using Groq's fast Mixtral implementation
+            completion = groq_client.chat.completions.create(
+                messages=[{
+                    "role": "user",
+                    "content": f"Summarize this technical article in 3 concise bullet points:\n\n{content[:6000]}"
+                }],
+                model="mixtral-8x7b-32768",
+                temperature=0.3
+            )
+            return completion.choices[0].message.content
+            
+        # Default to Gemini
+        model = genai.GenerativeModel('gemini-pro')
+        response = model.generate_content(
+            f"Create a 3-point summary of this article. Focus on key technical concepts and practical applications:\n\n{content[:30000]}"
+        )
+        return response.text
+
+    except Exception as e:
+        print(f"AI summary failed: {e}")
+        return content[:400] + "..."  # Fallback to truncation
+
+def get_domain(url: str) -> str:
+    """Extract root domain for source credibility"""
+    parsed = urlparse(url)
+    return parsed.netloc.replace("www.", "").split(".")[0]
 
 # Main function to handle course search and generation
 async def search_or_generate_course(
