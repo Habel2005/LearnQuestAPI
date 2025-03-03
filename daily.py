@@ -3,7 +3,6 @@ import logging
 import re
 import os
 from fastapi import HTTPException
-from flask import jsonify, request
 import requests
 import random
 import json

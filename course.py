@@ -3,13 +3,15 @@ from urllib.parse import urlparse
 import uuid
 from newspaper import Article
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from bs4 import BeautifulSoup
 import google.generativeai as genai
 from groq import Groq
 import requests
 import json
 import re
+import nltk
+nltk.download('punkt')
 
 # API configuration
 API_KEYS = {

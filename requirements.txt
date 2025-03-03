@@ -7,5 +7,5 @@ firebase-admin
 groq
 pydantic
 flask==3.1.0
-BeautifulSoup
-newspaper
+beautifulsoup4
+newspaper3k
