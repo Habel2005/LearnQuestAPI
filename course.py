@@ -257,32 +257,26 @@ def get_github_resources(search_query: str, max_results: int = 2) -> List[Dict[s
         return []
 
 def get_articles_resources(query: str, limit: int = 3) -> list:
-    """Search for articles and generate AI-powered summaries"""
+    """Search for articles and generate AI-powered summaries using SerpAPI"""
     try:
-        # Use Google search instead of Bing
-        search_url = "https://www.google.com/search"
-        params = {"q": query, "num": limit, "hl": "en"}
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        api_key = "9ba31911722f0584e6986eabb113cfd3d703970fd3d7b918a1f11a3d47f468f5"  
+        params = {
+            "engine": "google",
+            "q": query,
+            "num": limit,
+            "api_key": api_key
         }
+        response = requests.get("https://serpapi.com/search", params=params)
+        data = response.json()
 
-        response = requests.get(search_url, params=params, headers=headers)
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, "html.parser")
         results = []
+        for result in data.get("organic_results", [])[:limit]:
+            link = result.get("link")
+            title = result.get("title")
 
-        # Extract Google search results
-        for result in soup.find_all("div", class_="tF2Cxc")[:limit]:
-            link = result.find("a")["href"]
-            title = result.find("h3").get_text(strip=True)
-            
-            # Get clean article content
             article_content = extract_article_content(link)
-            
-            # Generate AI summary
             summary = generate_ai_summary(article_content)
-            
+
             results.append({
                 "type": "article",
                 "title": title,
