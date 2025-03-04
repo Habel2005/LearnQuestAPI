@@ -33,8 +33,15 @@ CATEGORIES = [
     "Cloud Computing", "DevOps", "Cybersecurity", "Blockchain",
     "UI/UX Design", "Game Development", "IoT", "AR/VR",
     "Business Analytics", "Digital Marketing", "Product Management",
-    "Software Architecture"
+    "Software Architecture", "API Development", "Microservices",
+    "Database Management", "Serverless Computing", "Event-Driven Architecture",
+    "Authentication & Authorization", "Performance Optimization",
+    "Caching Strategies", "Observability & Logging", "Scalability & Load Balancing",
+    "Containerization & Orchestration", "Security & Compliance",
+    "Backend Frameworks", "CI/CD & Infrastructure as Code",
+    "FinTech & Payment Systems", "E-commerce & Transactional Systems","Python"
 ]
+
 
 # Learning styles supported
 LEARNING_STYLES = ['Videos', 'Articles', 'Flashcards & Summaries', 'Step by Step Guides']
