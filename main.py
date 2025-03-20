@@ -163,75 +163,38 @@ class CourseService:
 @app.get("/daily-challenges")
 async def daily_challenges(userId: str = Query(..., description="User ID")):
     """Get personalized daily challenges """
-    try:
-        user_ref = db.collection('users').document(userId)
-        user_doc = user_ref.get()
-
-        if not user_doc.exists:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        user_data = user_doc.to_dict()
-        preferences = user_data.get('preferences', {})
-        
-        # Extract preferences
-        interests = preferences.get('interests', [])
-        skill_level = preferences.get('skillLevel', 'Beginner')
-        learning_style = preferences.get('learningStyle', 'Videos')
-        daily_commitment = preferences.get('dailyCommitment', '15 minutes')
-
-        # Determine number of challenges
-        num_challenges = get_num_challenges(daily_commitment)
-
-        # Generate challenges
-        challenges = []
-
-        # Check if helper functions exist
-        try:
-            coding_challenge = generate_coding_challenge(interests, skill_level)
-            if coding_challenge:
-                challenges.append(coding_challenge)
-
-            learning_challenge = generate_learning_challenge(interests, skill_level, learning_style)
-            if learning_challenge:
-                challenges.append(learning_challenge)
-
-            if num_challenges >= 3:
-                project_challenge = generate_project_challenge(interests, skill_level)
-                if project_challenge:
-                    challenges.append(project_challenge)
-
-            quiz_challenge = generate_quiz_challenge(interests, skill_level)
-            if quiz_challenge:
-                challenges.append(quiz_challenge)
-
-        except Exception as e:
-            logging.error(f"Error generating challenges: {e}")
-            return {"error": "Challenge generation failed", "details": str(e)}
-
-        # Store in Firestore
-        daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
-        try:
-            daily_challenges_ref.set({
-                "challenges": challenges,
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "streakCount": get_streak_count(userId),
-                # "completedToday": get_completed_challenges_today(userId)
-            })
-            logging.info(f"Daily challenges stored for user: {userId}")
-        except Exception as e:
-            logging.error(f"Error storing daily challenges: {e}")
-            return {"error": "Firestore storage failed", "details": str(e)}
-
+    user_ref = db.collection('users').document(userId)
+    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
+    
+    # Check if today's challenges already exist
+    daily_challenges_doc = daily_challenges_ref.get()
+    if daily_challenges_doc.exists:
+        daily_data = daily_challenges_doc.to_dict()
         return {
-            "challenges": challenges,
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "streakCount": get_streak_count(userId),
-            # "completedToday": get_completed_challenges_today(userId),
+            "challenges": daily_data.get("challenges", []),
+            "date": daily_data.get("date", datetime.now().strftime("%Y-%m-%d")),
+            "streakCount": daily_data.get("streakCount", get_streak_count(userId)),
+            "completedToday": daily_data.get("completedToday", [])
         }
 
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        return {"error": "Internal server error", "details": str(e)}
+    # If no challenges exist for today, generate new ones
+    challenges = generate_challenges_for_user(userId)
+
+    # Store new challenges in Firestore
+    daily_challenges_ref.set({
+        "challenges": challenges,
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "streakCount": get_streak_count(userId),
+        "completedToday": []
+    })
+
+    return {
+        "challenges": challenges,
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "streakCount": get_streak_count(userId),
+        "completedToday": []
+    }
+
 
 @app.post("/complete-challenge")
 async def complete_challenge(userId: str = Query(...), challengeId: str = Query(...)):

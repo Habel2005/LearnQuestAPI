@@ -45,66 +45,53 @@ DIFFICULTY_MAPPING = {
     "Advanced": ["advanced", "hard", "expert"]
 }
 
-def get_daily_challenges(user_id):
-    """Retrieve stored daily challenges or generate new ones."""
-    user_ref = db.collection('users').document(user_id)
-    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
-
-    daily_challenges_doc = daily_challenges_ref.get()
-    
-    if daily_challenges_doc.exists:
-        return daily_challenges_doc.to_dict()
-
-    # If no challenges exist for today, generate new ones
-    return generate_challenges_for_user(user_id)
-
 
 def generate_challenges_for_user(user_id):
-    """Generate and store personalized daily challenges for a user."""
+    """Generate personalized daily challenges for a user based on preferences."""
     user_ref = db.collection('users').document(user_id)
     user_doc = user_ref.get()
-
+    
     if not user_doc.exists:
         raise HTTPException(status_code=404, detail="User not found")
 
     user_data = user_doc.to_dict()
     preferences = user_data.get('preferences', {})
 
+    # Extract preferences
     interests = preferences.get('interests', [])
     skill_level = preferences.get('skillLevel', 'Beginner')
     learning_style = preferences.get('learningStyle', 'Videos')
     daily_commitment = preferences.get('dailyCommitment', '15 minutes')
 
+    # Determine number of challenges
     num_challenges = get_num_challenges(daily_commitment)
+
+    # Generate challenges
     challenges = []
+    
+    # Coding challenge
+    coding_challenge = generate_coding_challenge(interests, skill_level)
+    if coding_challenge:
+        challenges.append(coding_challenge)
+    
+    # Learning challenge
+    learning_challenge = generate_learning_challenge(interests, skill_level, learning_style)
+    if learning_challenge:
+        challenges.append(learning_challenge)
+    
+    # Project challenge (only if commitment is high)
+    if num_challenges >= 3:
+        project_challenge = generate_project_challenge(interests, skill_level)
+        if project_challenge:
+            challenges.append(project_challenge)
+    
+    # Quiz challenge
+    quiz_challenge = generate_quiz_challenge(interests, skill_level)
+    if quiz_challenge:
+        challenges.append(quiz_challenge)
 
-    # Add different challenges
-    if (challenge := generate_coding_challenge(interests, skill_level)): challenges.append(challenge)
-    if (challenge := generate_learning_challenge(interests, skill_level, learning_style)): challenges.append(challenge)
-    if num_challenges >= 3 and (challenge := generate_project_challenge(interests, skill_level)): challenges.append(challenge)
-    if (challenge := generate_quiz_challenge(interests, skill_level)): challenges.append(challenge)
-
-    challenges = challenges[:num_challenges]  # Trim to fit user commitment
-
-    # Store in Firestore
-    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
-    try:
-        daily_challenges_ref.set({
-            "challenges": challenges,
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "streakCount": get_streak_count(user_id),  
-            "completedToday": mark_challenge_completed(user_id)
-        })
-        logging.info(f"Stored daily challenges for user {user_id}")
-    except Exception as e:
-        logging.error(f"Error storing daily challenges: {str(e)}")
-
-    return {
-        "challenges": challenges,
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "streakCount": get_streak_count(user_id),
-        "completedToday": mark_challenge_completed(user_id),
-    }
+    # Limit challenges to daily commitment
+    return challenges[:num_challenges]
 
 
 def get_num_challenges(commitment: str) -> int:
