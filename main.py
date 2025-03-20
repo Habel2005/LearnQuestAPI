@@ -163,7 +163,16 @@ class CourseService:
 @app.get("/daily-challenges")
 async def daily_challenges(userId: str = Query(..., description="User ID")):
     """Fetch daily challenges for a user."""
-    return get_daily_challenges(userId)
+    user_ref = db.collection('users').document(userId)
+    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
+
+    daily_challenges_doc = daily_challenges_ref.get()
+    
+    if daily_challenges_doc.exists:
+        return daily_challenges_doc.to_dict()
+
+    # If no challenges exist for today, generate new ones
+    return generate_challenges_for_user(userId)
 
 @app.post("/complete-challenge")
 async def complete_challenge(userId: str = Query(...), challengeId: str = Query(...)):
