@@ -18,7 +18,8 @@ API_KEYS = {
     "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY"),
     "GROQ_API_KEY": os.getenv("GROQ_API_KEY"),
     "YOUTUBE_API_KEY": os.getenv("YOUTUBE_API_KEY"),
-    "GITHUB_API_KEY": os.getenv("GITHUB_API_KEY")
+    "GITHUB_API_KEY": os.getenv("GITHUB_API_KEY"),
+    "SERP_API_KEY": os.getenv("SERP_API_KEY")
 }
 
 # Initialize AI models
@@ -266,7 +267,8 @@ def get_github_resources(search_query: str, max_results: int = 2) -> List[Dict[s
 def get_articles_resources(query: str, limit: int = 3) -> list:
     """Search for articles and generate AI-powered summaries using SerpAPI"""
     try:
-        api_key = "9ba31911722f0584e6986eabb113cfd3d703970fd3d7b918a1f11a3d47f468f5"  
+        api_key = API_KEYS['SERP_API_KEY']
+        # api_key = "9ba31911722f0584e6986eabb113cfd3d703970fd3d7b918a1f11a3d47f468f5"  
         params = {
             "engine": "google",
             "q": query,
