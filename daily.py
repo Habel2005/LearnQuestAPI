@@ -11,7 +11,7 @@ import google.generativeai as genai
 import firebase_admin
 from firebase_admin import credentials, firestore
 import googleapiclient.discovery
-from datetime import datetime
+from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, firestore
 
@@ -35,6 +35,9 @@ GITHUB_TOKEN = os.getenv("GITHUB_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = "mixtral-8x7b-32768"
 
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+SEARCH_ENGINE_ID = os.getenv("SEARCH_ENGINE_ID")
+
 # Difficulty mapping for personalization
 DIFFICULTY_MAPPING = {
     "Beginner": ["easy", "beginner", "starter"],
@@ -43,75 +46,66 @@ DIFFICULTY_MAPPING = {
 }
 
 def get_daily_challenges(user_id):
-    """Get personalized daily challenges for a user and store them in Firestore."""
-    # Validate user
+    """Retrieve stored daily challenges or generate new ones."""
+    user_ref = db.collection('users').document(user_id)
+    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
+
+    daily_challenges_doc = daily_challenges_ref.get()
+    
+    if daily_challenges_doc.exists:
+        return daily_challenges_doc.to_dict()
+
+    # If no challenges exist for today, generate new ones
+    return generate_challenges_for_user(user_id)
+
+
+def generate_challenges_for_user(user_id):
+    """Generate and store personalized daily challenges for a user."""
     user_ref = db.collection('users').document(user_id)
     user_doc = user_ref.get()
-    
+
     if not user_doc.exists:
         raise HTTPException(status_code=404, detail="User not found")
 
     user_data = user_doc.to_dict()
     preferences = user_data.get('preferences', {})
-    
-    # Extract preferences
+
     interests = preferences.get('interests', [])
     skill_level = preferences.get('skillLevel', 'Beginner')
     learning_style = preferences.get('learningStyle', 'Videos')
     daily_commitment = preferences.get('dailyCommitment', '15 minutes')
 
-    # Determine number of challenges
     num_challenges = get_num_challenges(daily_commitment)
-
-    # Generate challenges
     challenges = []
-    
-    # Coding challenge
-    coding_challenge = generate_coding_challenge(interests, skill_level)
-    if coding_challenge:
-        challenges.append(coding_challenge)
-    
-    # Learning challenge
-    learning_challenge = generate_learning_challenge(interests, skill_level, learning_style)
-    if learning_challenge:
-        challenges.append(learning_challenge)
-    
-    # Project challenge (only if commitment is high)
-    if num_challenges >= 3:
-        project_challenge = generate_project_challenge(interests, skill_level)
-        if project_challenge:
-            challenges.append(project_challenge)
-    
-    # Quiz challenge
-    quiz_challenge = generate_quiz_challenge(interests, skill_level)
-    if quiz_challenge:
-        challenges.append(quiz_challenge)
 
-    # Limit challenges to daily commitment
-    challenges = challenges[:num_challenges]
+    # Add different challenges
+    if (challenge := generate_coding_challenge(interests, skill_level)): challenges.append(challenge)
+    if (challenge := generate_learning_challenge(interests, skill_level, learning_style)): challenges.append(challenge)
+    if num_challenges >= 3 and (challenge := generate_project_challenge(interests, skill_level)): challenges.append(challenge)
+    if (challenge := generate_quiz_challenge(interests, skill_level)): challenges.append(challenge)
 
-    # Store in Firestore under `users/{userId}/daily_challenges`
+    challenges = challenges[:num_challenges]  # Trim to fit user commitment
+
+    # Store in Firestore
     daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
     try:
-            daily_challenges_ref.set({
-                "challenges": challenges,
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "streakCount": get_user_streak(user_id),
-                "completedToday": get_completed_challenges_today(user_id)
-            })
-            logging.info("Daily challenges stored for user: {}".format(user_id))
-            s='good'
+        daily_challenges_ref.set({
+            "challenges": challenges,
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "streakCount": get_streak_count(user_id),  
+            "completedToday": mark_challenge_completed(user_id)
+        })
+        logging.info(f"Stored daily challenges for user {user_id}")
     except Exception as e:
-            logging.error("Error storing daily challenges for user {}: {}".format(user_id, str(e)))
-            s='bad'
+        logging.error(f"Error storing daily challenges: {str(e)}")
 
     return {
         "challenges": challenges,
         "date": datetime.now().strftime("%Y-%m-%d"),
-        "streakCount": get_user_streak(user_id),
-        "completedToday": get_completed_challenges_today(user_id),
-        "oh":s
+        "streakCount": get_streak_count(user_id),
+        "completedToday": mark_challenge_completed(user_id),
     }
+
 
 def get_num_challenges(commitment: str) -> int:
     """Determine the number of challenges based on daily commitment"""
@@ -370,8 +364,8 @@ def generate_learning_challenge(interests, skill_level, learning_style):
     # Determine resource type based on learning style
     if learning_style == "Videos":
         return generate_video_challenge(interests, skill_level)
-    # elif learning_style == "Articles":
-    #     return generate_article_challenge(interests, skill_level)
+    elif learning_style == "Articles":
+        return generate_article_challenge(interests, skill_level)
     elif learning_style == "Flashcards & Summaries":
         return generate_summary_challenge(interests, skill_level)
     else:  # "Step by Step Guides"
@@ -459,93 +453,89 @@ def generate_video_challenge(interests, skill_level):
         "resourceUrl": None
     }
 
-# def generate_article_challenge(interests, skill_level):
-#     """Generate a challenge to read an educational article."""
-#     # Select a random interest
-#     interest = random.choice(interests) if interests else "Programming"
+API_USAGE_COUNT = 0
+DAILY_LIMIT = 100  
+
+def generate_article_challenge(interests, skill_level):
+    """Generate an article challenge using Google Custom Search API."""
+    global API_USAGE_COUNT
+
+    # Stop requests if daily limit is reached
+    if API_USAGE_COUNT >= DAILY_LIMIT:
+        return {
+            "id": "error-limit-exceeded",
+            "title": "Daily Limit Reached",
+            "description": "Google API daily limit exceeded. Try again tomorrow.",
+            "source": "Google Custom Search API",
+            "type": "error",
+            "difficulty": None,
+            "estimatedTime": None,
+            "resourceType": None,
+            "resourceUrl": None
+        }
+
+    # Select a random interest
+    interest = random.choice(interests) if interests else "Programming"
+
+    # Trusted tech sources
+    sources = [
+        "medium.com", "dev.to", "freecodecamp.org",
+        "css-tricks.com", "smashingmagazine.com"
+    ]
     
-#     # Try to find articles from good sources
-#     sources = [
-#         "medium.com", 
-#         "dev.to", 
-#         "freecodecamp.org", 
-#         "css-tricks.com", 
-#         "smashingmagazine.com"
-#     ]
+    source = random.choice(sources)
+
+    # Skill level keywords
+    level_terms = {
+        "Beginner": ["beginner", "introduction", "basics"],
+        "Intermediate": ["intermediate", "deep dive"],
+        "Advanced": ["advanced", "expert", "mastery"]
+    }
     
-#     source = random.choice(sources)
-    
-#     # Map skill level to search terms
-#     level_terms = {
-#         "Beginner": ["beginner", "introduction", "basics"],
-#         "Intermediate": ["intermediate", "deep dive"],
-#         "Advanced": ["advanced", "expert", "mastery"]
-#     }
-    
-#     level_term = random.choice(level_terms.get(skill_level, ["beginner"]))
-    
-#     # Search for articles (using Google Search API would be ideal, but here we'll simulate)
-#     try:
-#         # Construct Google search URL (in a real app, use their API)
-#         search_url = f"https://www.google.com/search?q=site:{source}+{interest}+{level_term}"
-        
-#         headers = {
-#             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-#         }
-        
-#         response = requests.get(search_url, headers=headers)
-        
-#         if response.status_code == 200:
-#             soup = BeautifulSoup(response.text, "html.parser")
+    level_term = random.choice(level_terms.get(skill_level, ["beginner"]))
+
+    # Construct API request URL
+    query = f"site:{source} {interest} {level_term}"
+    url = f"https://www.googleapis.com/customsearch/v1?q={query}&key={GOOGLE_API_KEY}&cx={SEARCH_ENGINE_ID}"
+
+    try:
+        response = requests.get(url)
+        API_USAGE_COUNT += 1  # Track API usage
+
+        if response.status_code == 200:
+            data = response.json()
+            articles = data.get("items", [])
             
-#             # Extract search results (simplified, would need refinement in a real app)
-#             search_results = soup.select(".yuRUbf a")
-            
-#             if search_results:
-#                 result = random.choice(search_results[:5])  # Choose from top 5
-#                 article_url = result["href"]
-#                 article_title = result.select_one("h3").text
+            if articles:
+                selected_article = random.choice(articles[:5])  # Choose from top 5 results
                 
-#                 # Fetch article to get description and reading time
-#                 article_response = requests.get(article_url, headers=headers)
-                
-#                 if article_response.status_code == 200:
-#                     article_soup = BeautifulSoup(article_response.text, "html.parser")
-                    
-#                     # Extract meta description
-#                     meta_desc = article_soup.select_one('meta[name="description"]')
-#                     description = meta_desc["content"] if meta_desc else "Read this informative article to learn more."
-                    
-#                     # Estimate reading time (simplified)
-#                     word_count = len(article_soup.text.split())
-#                     reading_time = max(5, min(30, word_count // 200))  # 200 words per minute, min 5, max 30
-                    
-#                     return {
-#                         "id": f"article-{random.randint(1000, 9999)}",
-#                         "title": f"Read & Learn: {article_title}",
-#                         "description": description[:200] + "...",
-#                         "source": source,
-#                         "type": "learning",
-#                         "difficulty": skill_level,
-#                         "estimatedTime": f"{reading_time} minutes",
-#                         "resourceType": "Article",
-#                         "resourceUrl": article_url
-#                     }
-#     except Exception as e:
-#         print(f"Error generating article challenge: {e}")
-    
-#     # Fallback to a generic article challenge
-#     return {
-#         "id": f"generic-article-{random.randint(1000, 9999)}",
-#         "title": f"Read about {interest}",
-#         "description": f"Find and read an article about {interest} and write a short summary of what you learned.",
-#         "source": "System Generated",
-#         "type": "learning",
-#         "difficulty": skill_level,
-#         "estimatedTime": "15 minutes",
-#         "resourceType": "Article",
-#         "resourceUrl": None
-#     }
+                return {
+                    "id": f"article-{random.randint(1000, 9999)}",
+                    "title": f"Read & Learn: {selected_article['title']}",
+                    "description": selected_article.get("snippet", "An informative article on this topic."),
+                    "source": source,
+                    "type": "learning",
+                    "difficulty": skill_level,
+                    "estimatedTime": "15-30 minutes",
+                    "resourceType": "Article",
+                    "resourceUrl": selected_article["link"]
+                }
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching article: {e}")
+
+    # Fallback in case of an error
+    return {
+        "id": f"generic-article-{random.randint(1000, 9999)}",
+        "title": f"Read about {interest}",
+        "description": f"Find and read an article about {interest} and write a short summary of what you learned.",
+        "source": "System Generated",
+        "type": "learning",
+        "difficulty": skill_level,
+        "estimatedTime": "15 minutes",
+        "resourceType": "Article",
+        "resourceUrl": None
+    }
 
 def generate_summary_challenge(interests, skill_level):
     """Generate a flashcard or summary challenge using Groq AI."""
@@ -927,12 +917,50 @@ def create_fallback_quiz(interest, skill_level):
         "resourceType": "Quiz"
     }
 
-def get_user_streak(user_id):
-    """Calculate user's challenge completion streak"""
-    # Implementation would query Firestore for completion history
-    return random.randint(0, 14)  # Temporary implementation
+def mark_challenge_completed(user_id, challenge_id):
+    """Mark a challenge as completed and update streak count."""
+    user_ref = db.collection('users').document(user_id)
+    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
 
-def get_completed_challenges_today(user_id):
-    """Get number of challenges completed today"""
-    # Implementation would check Firestore
-    return 0  # Temporary implementation
+    daily_challenges_doc = daily_challenges_ref.get()
+    if not daily_challenges_doc.exists:
+        raise HTTPException(status_code=404, detail="No challenges found for today.")
+
+    daily_data = daily_challenges_doc.to_dict()
+    completed_today = daily_data.get("completedToday", [])
+
+    if challenge_id in completed_today:
+        raise HTTPException(status_code=400, detail="Challenge already completed.")
+
+    completed_today.append(challenge_id)
+
+    # Update Firestore
+    daily_challenges_ref.update({
+        "completedToday": completed_today,
+        "streakCount": get_streak_count(user_id)  # Recalculate streak
+    })
+
+    return {
+        "message": "Challenge marked as completed.",
+        "streakCount": get_streak_count(user_id),
+        "completedToday": completed_today
+    }
+
+
+def get_streak_count(user_id):
+    """Count the number of consecutive days with challenges."""
+    user_ref = db.collection('users').document(user_id).collection("daily_challenges")
+    today = datetime.utcnow()  # Use UTC time for consistency
+    streak = 0
+
+    while True:
+        date_str = (today - timedelta(days=streak)).strftime("%Y-%m-%d")
+        challenge_doc = user_ref.document(date_str).get()
+
+        if challenge_doc.exists and challenge_doc.to_dict().get("completed", False):
+            streak += 1  # Increment streak only if the challenge is marked as completed
+        else:
+            break  # Stop counting if a challenge is missing or not completed
+
+    return streak
+
