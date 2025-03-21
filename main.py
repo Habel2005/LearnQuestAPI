@@ -225,6 +225,8 @@ async def fetch_categories(limit: int = 3):
 async def get_all_categories():
     return await CategoryService.get_all_categories()
 
+logging.basicConfig(level=logging.INFO)
+
 @app.get("/categories/more")
 async def get_more_categories(excluded: List[str] = Query([])):
     logging.info(f"Excluded Categories Received: {excluded}")  # Log the input
