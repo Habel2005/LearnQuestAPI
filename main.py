@@ -72,7 +72,7 @@ DIFFICULTY_MAPPING = {
 class CategoryService:
     # List of potential categories
     CATEGORIES = [
-    "Web Development", "Mobile Apps", "Data Science", "Machine Learning",
+        "Web Development", "Mobile Apps", "Data Science", "Machine Learning",
     "Cloud Computing", "DevOps", "Cybersecurity", "Blockchain",
     "UI/UX Design", "Game Development", "IoT", "AR/VR",
     "Business Analytics", "Digital Marketing", "Product Management",
