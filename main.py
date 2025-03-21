@@ -196,11 +196,6 @@ async def daily_challenges(userId: str = Query(..., description="User ID")):
     }
 
 
-@app.post("/complete-challenge")
-async def complete_challenge(userId: str = Query(...), challengeId: str = Query(...)):
-    """Mark a challenge as completed."""
-    return mark_challenge_completed(userId, challengeId)
-
 @app.get("/categories")
 async def fetch_categories(limit: int = 3):
     return await CategoryService.get_categories(limit)

@@ -96,9 +96,11 @@ def generate_challenges_for_user(user_id):
 
 def get_num_challenges(commitment: str) -> int:
     """Determine the number of challenges based on daily commitment"""
-    if commitment == '15 minutes': return 1
-    if commitment == '30 minutes': return 2
-    return 3
+    if commitment == '5 minutes': return 1
+    if commitment == '10 minutes': return 2
+    if commitment == '15 minutes': return 3
+    if commitment == '30 minutes': return 4
+    return 5
 
 def generate_coding_challenge(interests, skill_level):
     """Generate a coding challenge using a random method."""
@@ -904,34 +906,34 @@ def create_fallback_quiz(interest, skill_level):
         "resourceType": "Quiz"
     }
 
-def mark_challenge_completed(user_id, challenge_id):
-    """Mark a challenge as completed and update streak count."""
-    user_ref = db.collection('users').document(user_id)
-    daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
+# def mark_challenge_completed(user_id, challenge_id):
+#     """Mark a challenge as completed and update streak count."""
+#     user_ref = db.collection('users').document(user_id)
+#     daily_challenges_ref = user_ref.collection("daily_challenges").document(datetime.now().strftime("%Y-%m-%d"))
 
-    daily_challenges_doc = daily_challenges_ref.get()
-    if not daily_challenges_doc.exists:
-        raise HTTPException(status_code=404, detail="No challenges found for today.")
+#     daily_challenges_doc = daily_challenges_ref.get()
+#     if not daily_challenges_doc.exists:
+#         raise HTTPException(status_code=404, detail="No challenges found for today.")
 
-    daily_data = daily_challenges_doc.to_dict()
-    completed_today = daily_data.get("completedToday", [])
+#     daily_data = daily_challenges_doc.to_dict()
+#     completed_today = daily_data.get("completedToday", [])
 
-    if challenge_id in completed_today:
-        raise HTTPException(status_code=400, detail="Challenge already completed.")
+#     if challenge_id in completed_today:
+#         raise HTTPException(status_code=400, detail="Challenge already completed.")
 
-    completed_today.append(challenge_id)
+#     completed_today.append(challenge_id)
 
-    # Update Firestore
-    daily_challenges_ref.update({
-        "completedToday": completed_today,
-        "streakCount": get_streak_count(user_id)  # Recalculate streak
-    })
+#     # Update Firestore
+#     daily_challenges_ref.update({
+#         "completedToday": completed_today,
+#         "streakCount": get_streak_count(user_id)  # Recalculate streak
+#     })
 
-    return {
-        "message": "Challenge marked as completed.",
-        "streakCount": get_streak_count(user_id),
-        "completedToday": completed_today
-    }
+#     return {
+#         "message": "Challenge marked as completed.",
+#         "streakCount": get_streak_count(user_id),
+#         "completedToday": completed_today
+#     }
 
 
 def get_streak_count(user_id):
