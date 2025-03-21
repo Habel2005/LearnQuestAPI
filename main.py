@@ -124,6 +124,20 @@ class CategoryService:
             "gradient_colors": color,
             "image": f"assets/card{random.randint(1, 4)}.jpg"
         } for category, color in zip(CategoryService.CATEGORIES, CategoryService.COLOR_GRADIENTS)]
+    
+    @staticmethod
+    async def get_more_categories(excluded_categories: List[str]) -> List[Dict]:
+        """Get the remaining categories that were not initially displayed."""
+        remaining_categories = [
+            (cat, color) for cat, color in zip(CategoryService.CATEGORIES, CategoryService.COLOR_GRADIENTS)
+            if cat not in excluded_categories
+        ]
+
+        return [{
+            "name": category,
+            "gradient_colors": color,
+            "image": f"assets/card{random.randint(1, 4)}.jpg"
+        } for category, color in remaining_categories]
 
 # ========== DATA MODELS ==========
 class TopRatedCourse(BaseModel):
@@ -210,6 +224,15 @@ async def fetch_categories(limit: int = 3):
 @app.get("/categories/all")
 async def get_all_categories():
     return await CategoryService.get_all_categories()
+
+@app.get("/categories/more")
+async def get_more_categories(excluded: List[str] = Query([])):
+    """
+    Fetch the remaining categories that are not included in the initial list.
+    The `excluded` query parameter should contain the names of already fetched categories.
+    """
+    more_categories = await CategoryService.get_more_categories(excluded)
+    return more_categories
 
 @app.post("/courses/search")
 async def search_course(request: Request):
