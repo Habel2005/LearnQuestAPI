@@ -227,12 +227,10 @@ async def get_all_categories():
 
 @app.get("/categories/more")
 async def get_more_categories(excluded: List[str] = Query([])):
-    """
-    Fetch the remaining categories that are not included in the initial list.
-    The `excluded` oquery parameter should contain the names of already fetched categories.
-    """
+    print("Excluded Categories:", excluded)  # Debugging line
     more_categories = await CategoryService.get_more_categories(excluded)
     return more_categories
+
 
 @app.post("/courses/search")
 async def search_course(request: Request):
