@@ -107,13 +107,14 @@ class CategoryService:
 
     @staticmethod
     async def get_categories(limit: int = 3) -> List[Dict]:
-        """Get random categories with consistent colors"""
-        selected = random.sample(range(len(CategoryService.CATEGORIES)), limit)
+        """Get random categories with consistent colors."""
+        selected_indices = random.sample(range(len(CategoryService.CATEGORIES)), limit)
+        
         return [{
             "name": CategoryService.CATEGORIES[i],
-            "color": CategoryService.COLOR_GRADIENTS[i],
+            "color": CategoryService.COLOR_GRADIENTS[i % len(CategoryService.COLOR_GRADIENTS)],  # Use modulo to prevent index error
             "image": f"assets/card{random.randint(1, 4)}.jpg"
-        } for i in selected]
+        } for i in selected_indices]
 
     @staticmethod
     async def get_all_categories() -> List[Dict]:
