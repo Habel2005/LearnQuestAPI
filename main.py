@@ -227,10 +227,12 @@ async def get_all_categories():
 
 @app.get("/categories/more")
 async def get_more_categories(excluded: List[str] = Query([])):
-    print("Excluded Categories:", excluded)  # Debugging line
+    logging.info(f"Excluded Categories Received: {excluded}")  # Log the input
+    print(f"Excluded Categories Received: {excluded}")  # Also print to console
+    
+    # Now call the service
     more_categories = await CategoryService.get_more_categories(excluded)
     return more_categories
-
 
 @app.post("/courses/search")
 async def search_course(request: Request):
