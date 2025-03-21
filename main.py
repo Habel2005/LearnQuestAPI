@@ -229,7 +229,7 @@ async def get_all_categories():
 async def get_more_categories(excluded: List[str] = Query([])):
     """
     Fetch the remaining categories that are not included in the initial list.
-    The `excluded` query parameter should contain the names of already fetched categories.
+    The `excluded` oquery parameter should contain the names of already fetched categories.
     """
     more_categories = await CategoryService.get_more_categories(excluded)
     return more_categories
