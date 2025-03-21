@@ -225,16 +225,12 @@ async def fetch_categories(limit: int = 3):
 async def get_all_categories():
     return await CategoryService.get_all_categories()
 
-logging.basicConfig(level=logging.INFO)
-
 @app.get("/categories/more")
-async def get_more_categories(excluded: List[str] = Query([])):
-    logging.info(f"Excluded Categories Received: {excluded}")  # Log the input
-    print(f"Excluded Categories Received: {excluded}")  # Also print to console
-    
-    # Now call the service
-    more_categories = await CategoryService.get_more_categories(excluded)
-    return more_categories
+async def get_more_categories(excluded: List[str] = Query(None)):
+    if excluded is None:
+        excluded = []  # Ensure it's a list
+    logger.info(f"Excluded Categories Received: {excluded}")  # Debugging
+    return await CategoryService.get_more_categories(excluded)
 
 @app.post("/courses/search")
 async def search_course(request: Request):
