@@ -72,11 +72,17 @@ DIFFICULTY_MAPPING = {
 class CategoryService:
     # List of potential categories
     CATEGORIES = [
-        "Web Development", "Mobile Apps", "Data Science", "Machine Learning",
-        "Cloud Computing", "DevOps", "Cybersecurity", "Blockchain",
-        "UI/UX Design", "Game Development", "IoT", "AR/VR",
-        "Business Analytics", "Digital Marketing", "Product Management",
-        "Software Architecture"
+    "Web Development", "Mobile Apps", "Data Science", "Machine Learning",
+    "Cloud Computing", "DevOps", "Cybersecurity", "Blockchain",
+    "UI/UX Design", "Game Development", "IoT", "AR/VR",
+    "Business Analytics", "Digital Marketing", "Product Management",
+    "Software Architecture", "API Development", "Microservices",
+    "Database Management", "Serverless Computing", "Event-Driven Architecture",
+    "Authentication & Authorization", "Performance Optimization",
+    "Caching Strategies", "Observability & Logging", "Scalability & Load Balancing",
+    "Containerization & Orchestration", "Security & Compliance",
+    "Backend Frameworks", "CI/CD & Infrastructure as Code",
+    "FinTech & Payment Systems", "E-commerce & Transactional Systems","Python"
     ]
     
     # Color palette for categories
