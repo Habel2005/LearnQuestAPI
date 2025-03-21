@@ -226,10 +226,14 @@ async def get_all_categories():
     return await CategoryService.get_all_categories()
 
 @app.get("/categories/more")
-async def get_more_categories(excluded: List[str] = Query(None)):
+async def get_more_categories(request: Request, excluded: List[str] = Query([])):
+    raw_query_params = request.query_params  
+    logger.info(f"RAW Query Params: {raw_query_params}")  # Log the raw data
+
     if excluded is None:
-        excluded = []  # Ensure it's a list
-    logger.info(f"Excluded Categories Received: {excluded}")  # Debugging
+        excluded = []
+    logger.info(f"Excluded Categories Received: {excluded}")  # Log parsed data
+    
     return await CategoryService.get_more_categories(excluded)
 
 @app.post("/courses/search")
