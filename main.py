@@ -128,16 +128,22 @@ class CategoryService:
     @staticmethod
     async def get_more_categories(excluded_categories: List[str]) -> List[Dict]:
         """Get the remaining categories that were not initially displayed."""
+    
+        # Normalize excluded categories for better matching
+        excluded_set = {cat.strip().lower() for cat in excluded_categories}
+
+        # Filter remaining categories
         remaining_categories = [
-            (cat, color) for cat, color in zip(CategoryService.CATEGORIES, CategoryService.COLOR_GRADIENTS)
-            if cat not in excluded_categories
+            category for category in CategoryService.CATEGORIES if category.lower() not in excluded_set
         ]
 
+        # Assign colors properly using modulo
         return [{
             "name": category,
-            "gradient_colors": color,
+            "gradient_colors": CategoryService.COLOR_GRADIENTS[i % len(CategoryService.COLOR_GRADIENTS)],
             "image": f"assets/card{random.randint(1, 4)}.jpg"
-        } for category, color in remaining_categories]
+        } for i, category in enumerate(remaining_categories)]
+
 
 # ========== DATA MODELS ==========
 class TopRatedCourse(BaseModel):
