@@ -11,6 +11,7 @@ import requests
 import json
 import re
 import nltk
+from rapidfuzz import fuzz
 nltk.download('punkt')
 
 # API configuration
@@ -49,32 +50,62 @@ LEARNING_STYLES = ['Videos', 'Articles', 'Flashcards & Summaries', 'Step by Step
 
 # Function to determine appropriate category for a search query
 def determine_category(query: str, interests: List[str]) -> str:
-    """Determine the most appropriate category for a search query."""
-    # Use Gemini to categorize the query
-    genai_model = genai.GenerativeModel('gemini-pro')
-    prompt = f"""
-    Determine the most appropriate category for this learning query: "{query}"
-    Choose from these categories: {', '.join(CATEGORIES)}
-    Consider user interests: {', '.join(interests)}
-    Respond with just the category name.
-    """
+    """Determine the most appropriate category for a search query using AI."""
     
+    # Initialize AI models
+    genai, groq_client = init_ai_models()
+
+    prompt = f"""
+    Determine the best category for this learning query: "{query}"
+    
+    Available categories: {', '.join(CATEGORIES)}
+    User interests: {', '.join(interests)}
+    
+    Respond with just the category name from the list. No explanations.
+    """
+
     try:
-        response = genai_model.generate_content(prompt)
-        category = response.text.strip()
-        # Validate that the returned category is in our list
+        # Try with Groq (LLaMA or Mixtral) first
+        completion = groq_client.chat.completions.create(
+            model="mixtral-8x7b-32768",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=100
+        )
+        response_text = completion.choices[0].message.content.strip()
+
+        # Extract category from response
+        category = response_text.split("\n")[0].strip()
+        
+        # Validate category
         if category in CATEGORIES:
             return category
-        else:
-            # Default to the first matching interest or "Web Development" if none match
-            for interest in interests:
-                if interest in CATEGORIES:
-                    return interest
-            return "Web Development"
+
     except Exception as e:
-        print(f"Error determining category: {e}")
-        # Fall back to a default category
-        return "Web Development"
+        print(f"Groq error, falling back to Gemini: {e}")
+
+    try:
+        # Use Gemini as a fallback
+        genai_model = genai.GenerativeModel('gemini-pro')
+        response = genai_model.generate_content(prompt)
+        response_text = response.text.strip()
+
+        # Extract and validate category
+        category = response_text.split("\n")[0].strip()
+        if category in CATEGORIES:
+            return category
+
+    except Exception as e:
+        print(f"Gemini error: {e}")
+
+    # Smart fallback: Choose most relevant category from interests
+    for interest in interests:
+        if interest in CATEGORIES:
+            return interest
+
+    # Absolute fallback: Choose a random category to prevent repetition
+    import random
+    return random.choice(CATEGORIES)
 
 # Function to generate a course outline based on user query and preferences
 def generate_course_outline(
@@ -483,3 +514,32 @@ async def update_course_progress(
         "courseId": course_id,
         "progress": progress.get(course_id, {})
     }
+
+def find_similar_courses(search_query: str, skill_level: str, category: str) -> Dict[str, Any]:
+    """Search for similar courses in Firestore using NLP-based similarity."""
+    
+    courses_ref = db.collection('courses')
+    query = courses_ref.where('skillLevel', '==', skill_level).limit(20)
+    results = query.get()
+
+    best_match = None
+    highest_score = 0
+
+    for doc in results:
+        course_data = doc.to_dict()
+        
+        # Check similarity using fuzzy matching
+        title_score = fuzz.ratio(search_query.lower(), course_data.get('title', '').lower())
+        desc_score = fuzz.partial_ratio(search_query.lower(), course_data.get('description', '').lower())
+        category_match = 20 if course_data.get("category") == category else 0  # Extra points for same category
+        
+        total_score = title_score + desc_score + category_match  # Weighted scoring
+
+        if total_score > highest_score:
+            highest_score = total_score
+            best_match = course_data
+
+    if best_match and highest_score > 60:  # Ensure a good match threshold
+        return best_match
+
+    return None  # No good match found, generate a new course
