@@ -67,7 +67,7 @@ def determine_category(query: str, interests: List[str]) -> str:
     try:
         # Try with Groq (LLaMA or Mixtral) first
         completion = groq_client.chat.completions.create(
-            model="mixtral-8x7b-32768",
+            model="deepseek-r1-distill-llama-70b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=100
@@ -86,7 +86,7 @@ def determine_category(query: str, interests: List[str]) -> str:
 
     try:
         # Use Gemini as a fallback
-        genai_model = genai.GenerativeModel('gemini-pro')
+        genai_model = genai.GenerativeModel('gemini-1.5-pro-latest')
         response = genai_model.generate_content(prompt)
         response_text = response.text.strip()
 
@@ -179,7 +179,7 @@ def generate_course_outline(
     try:
         # Try with Groq first (LLaMA or Mixtral)
         completion = groq_client.chat.completions.create(
-            model="llama3-70b-8192",  # or "mixtral-8x7b-32768"
+            model="llama-3.3-70b-versatile",  # or "mixtral-8x7b-32768"
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=4000
@@ -197,7 +197,7 @@ def generate_course_outline(
     except Exception as e:
         print(f"Groq error, falling back to Gemini: {e}")
         # Fall back to Gemini if Groq fails
-        genai_model = genai.GenerativeModel('gemini-pro')
+        genai_model = genai.GenerativeModel('gemini-1.5-pro-latest')
         response = genai_model.generate_content(prompt)
         response_text = response.text
         
@@ -358,7 +358,7 @@ def extract_article_content(url: str) -> str:
         return ""
 
 def generate_ai_summary(content: str, model: str = "gemini") -> str:
-    """Generate summary using either Groq (Mixtral) or Gemini"""
+    """Generate summary using either Groq or Gemini"""
     genai, groq_client = init_ai_models()
     if not content:
         return "Summary unavailable"
@@ -371,13 +371,13 @@ def generate_ai_summary(content: str, model: str = "gemini") -> str:
                     "role": "user",
                     "content": f"Summarize this technical article in 3 concise bullet points:\n\n{content[:6000]}"
                 }],
-                model="mixtral-8x7b-32768",
+                model="deepseek-r1-distill-llama-70b",
                 temperature=0.3
             )
             return completion.choices[0].message.content
             
         # Default to Gemini
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-pro-latest')
         response = model.generate_content(
             f"Create a 3-point summary of this article. Focus on key technical concepts and practical applications:\n\n{content[:30000]}"
         )
