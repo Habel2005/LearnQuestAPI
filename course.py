@@ -426,21 +426,16 @@ async def search_or_generate_course(
     skill_level = preferences.get('skillLevel', 'Beginner')
     learning_style = preferences.get('learningStyle', 'Videos')
     daily_commitment = preferences.get('dailyCommitment', '15 minutes')
+
+    category = determine_category(search_query, interests)
     
     # Check if we should search for existing courses
     if not generate_new:
-        # Search for similar courses in Firestore
-        # This is a simple search - could be enhanced with full-text search
-        courses_ref = db.collection('courses')
-        query = courses_ref.where('skillLevel', '==', skill_level).limit(10)
-        results = query.get()
+        # Use fuzzy matching to find a similar course
+        similar_course = find_similar_courses(search_query, skill_level, category, db)
         
-        for doc in results:
-            course_data = doc.to_dict()
-            # Very basic similarity check - could use better NLP here
-            if search_query.lower() in course_data.get('title', '').lower() or \
-               search_query.lower() in course_data.get('description', '').lower():
-                return course_data
+        if similar_course:
+            return similar_course  # Return the best-matched course
     
     # If no course found or force generate new, create a new course
     course_data = generate_course_outline(
@@ -515,7 +510,7 @@ async def update_course_progress(
         "progress": progress.get(course_id, {})
     }
 
-def find_similar_courses(search_query: str, skill_level: str, category: str) -> Dict[str, Any]:
+def find_similar_courses(search_query: str, skill_level: str, category: str,db) -> Dict[str, Any]:
     """Search for similar courses in Firestore using NLP-based similarity."""
     
     courses_ref = db.collection('courses')
