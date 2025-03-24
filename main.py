@@ -4,10 +4,9 @@ import sys
 import traceback
 from dotenv import load_dotenv
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Query,Request
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Query,Request,Depends
 import google.generativeai as genai
-from datetime import datetime
+from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import firestore
 from groq import Groq
@@ -284,8 +283,12 @@ async def update_progress(course_id: str, request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Dependency function
+def get_firestore_client():
+    return firestore.Client()
+
 @app.get("/tech-trends")
-async def get_tech_trends(db: firestore.Client):
+async def get_tech_trends(db: firestore.Client = Depends(get_firestore_client)):
     # Check cache in Firestore
     cache_ref = db.collection('tech_trends_cache').document('current')
     cache_data = cache_ref.get().to_dict()
