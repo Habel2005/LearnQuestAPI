@@ -285,52 +285,41 @@ async def update_progress(course_id: str, request: Request):
 
 @app.get("/tech-trends")
 async def get_tech_trends():
-    print("Fetching from Firestore...")  # Debuggingh
     cache_ref = db.collection('tech_trends_cache').document('current')
     
     try:
         cache_data = cache_ref.get().to_dict()
-        print("Firestore data:", cache_data)  # Debugging
 
         if cache_data and datetime.now() - cache_data['timestamp'].replace(tzinfo=None) < timedelta(hours=6):
             return cache_data['data']
     except Exception as e:
-        print(f"Firestore Error: {str(e)}")  # Debugging
         raise HTTPException(status_code=500, detail="Firestore fetch failed")
 
     # Generate new data
-    print("Initializing AI models...")  # Debugging
     try:
         groq_client = Groq(api_key=API_KEYS["GROQ_API_KEY"])
         if not groq_client:
             raise ValueError("groq_client is None")
     except Exception as e:
-        print(f"AI Model Init Error: {str(e)}")  # Debugging
         raise HTTPException(status_code=500, detail="AI model initialization failed")
 
-    print("Generating trends...")  # Debugging
     try:
         new_trends = await generate_tech_trends(groq_client)
-        print("Generated trends:", new_trends)  # Debugging
     except Exception as e:
-        print(f"Trend Generation Error: {str(e)}")  # Debugging
         raise HTTPException(status_code=500, detail="Trend generation failed")
 
     # Add weekly trend data
-    print("Adding weekly data...")  # Debugging
     for trend in new_trends:
         base = trend['popularity'] - 10
         trend['weeklyData'] = [base + i * 2 for i in range(7)]
 
     # Update cache
-    print("Updating Firestore cache...")  # Debugging
     try:
         cache_ref.set({
             'data': new_trends,
             'timestamp': datetime.now()
         })
     except Exception as e:
-        print(f"Firestore Update Error: {str(e)}")  # Debugging
         raise HTTPException(status_code=500, detail="Failed to update Firestore cache")
 
     return new_trends

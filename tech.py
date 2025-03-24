@@ -25,7 +25,6 @@ async def generate_tech_trends(groq_client):
     """
 
     try:
-        print("Sending request to Groq AI...")  # Debugging
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
@@ -33,15 +32,12 @@ async def generate_tech_trends(groq_client):
             max_tokens=4096,
             top_p=0.9
         )
-        
-        print("Groq Raw Response:", response)  # Log entire response
 
         # Ensure response is not empty
         if not response or not response.choices:
             raise HTTPException(status_code=500, detail="Groq AI returned an empty response")
 
         trends_text = response.choices[0].message.content
-        print("Raw AI Response:", trends_text)  # Debugging log
 
         # 🔹 **Handle AI formatting issues (e.g., backticks, semicolons)**
         trends_text_cleaned = re.sub(r';(?=\s*["}])', '', trends_text)  # Remove extra semicolons
@@ -53,11 +49,9 @@ async def generate_tech_trends(groq_client):
         try:
             trends = json.loads(trends_text_cleaned)
         except json.JSONDecodeError as e:
-            print(f"JSON Parsing Error: {str(e)}")  # Debug log
             raise HTTPException(status_code=500, detail="Invalid JSON format from AI")
 
         return trends
 
     except Exception as e:
-        print(f"AI Generation Error: {str(e)}")  # Debug log
         raise HTTPException(status_code=500, detail=f"Failed to generate trends: {str(e)}")
