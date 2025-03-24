@@ -30,8 +30,7 @@ async def generate_tech_trends(groq_client):
             messages=[{"role": "user", "content": prompt}],
             temperature=0.5,
             max_tokens=4096,
-            top_p=0.9,
-            json_mode=True
+            top_p=0.9
         )
         
         print("Groq Raw Response:", response)  # Log entire response
@@ -43,13 +42,14 @@ async def generate_tech_trends(groq_client):
         trends_text = response.choices[0].message.content
         print("Raw AI Response:", trends_text)  # Debugging log
 
-        # Try parsing JSON
-        trends = json.loads(trends_text)
-        return trends
+        # Ensure AI returns valid JSON
+        try:
+            trends = json.loads(trends_text)
+        except json.JSONDecodeError:
+            print(f"JSON Parsing Error - Raw AI Response: {trends_text}")  # Debug log
+            raise HTTPException(status_code=500, detail="Invalid JSON format from AI")
 
-    except json.JSONDecodeError as e:
-        print(f"JSON Parsing Error: {str(e)} - Raw AI Response: {trends_text}")  # Debug log
-        raise HTTPException(status_code=500, detail="Invalid JSON format from AI")
+        return trends
 
     except Exception as e:
         print(f"AI Generation Error: {str(e)}")  # Debug log
