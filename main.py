@@ -285,7 +285,7 @@ async def update_progress(course_id: str, request: Request):
 
 @app.get("/tech-trends")
 async def get_tech_trends():
-    print("Fetching from Firestore...")  # Debugging
+    print("Fetching from Firestore...")  # Debuggingh
     cache_ref = db.collection('tech_trends_cache').document('current')
     
     try:
