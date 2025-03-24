@@ -1,4 +1,5 @@
 import json
+import re
 from fastapi import HTTPException
 
 async def generate_tech_trends(groq_client):
@@ -42,10 +43,13 @@ async def generate_tech_trends(groq_client):
         trends_text = response.choices[0].message.content
         print("Raw AI Response:", trends_text)  # Debugging log
 
-        # Ensure AI returns valid JSON
-        trends_text_cleaned = re.sub(r';(?=\s*["}])', '', trends_text)
+        # 🔹 **Handle AI formatting issues (e.g., backticks, semicolons)**
+        trends_text_cleaned = re.sub(r';(?=\s*["}])', '', trends_text)  # Remove extra semicolons
 
-# Parse the cleaned JSON
+        # 🔹 **Remove surrounding markdown (e.g., ```json ... ```)**
+        trends_text_cleaned = re.sub(r"```json|```", "", trends_text_cleaned).strip()
+
+        # 🔹 **Parse the cleaned JSON**
         try:
             trends = json.loads(trends_text_cleaned)
         except json.JSONDecodeError as e:
