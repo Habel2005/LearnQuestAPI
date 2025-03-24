@@ -284,7 +284,7 @@ async def update_progress(course_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/tech-trends")
-async def get_tech_trends(db):
+async def get_tech_trends():
     print("Fetching from Firestore...")  # Debugging
     cache_ref = db.collection('tech_trends_cache').document('current')
     
