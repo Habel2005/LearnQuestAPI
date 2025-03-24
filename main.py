@@ -301,7 +301,7 @@ async def get_tech_trends():
     # Generate new data
     print("Initializing AI models...")  # Debugging
     try:
-        genai, groq_client = init_ai_models()
+        groq_client = Groq(api_key=API_KEYS["GROQ_API_KEY"])
         if not groq_client:
             raise ValueError("groq_client is None")
     except Exception as e:

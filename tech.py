@@ -24,15 +24,18 @@ async def generate_tech_trends(groq_client):
     """
 
     try:
+        print("Sending request to Groq AI...")  # Debugging
         response = groq_client.chat.completions.create(
-            model="llama3-70b",  # Most advanced Groq model as of 2025
+            model="llama3-70b",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.5,  # Balanced for realism
-            max_tokens=4096,  # Extended for complete JSON output
-            top_p=0.9,  # Ensures diverse yet controlled output
-            json_mode=True  # Guarantees valid JSON response
+            temperature=0.5,
+            max_tokens=4096,
+            top_p=0.9,
+            json_mode=True
         )
         
+        print("Groq Raw Response:", response)  # Log entire response
+
         # Ensure response is not empty
         if not response or not response.choices:
             raise HTTPException(status_code=500, detail="Groq AI returned an empty response")
@@ -45,7 +48,7 @@ async def generate_tech_trends(groq_client):
         return trends
 
     except json.JSONDecodeError as e:
-        print(f"JSON Parsing Error: {str(e)}")  # Debug log
+        print(f"JSON Parsing Error: {str(e)} - Raw AI Response: {trends_text}")  # Debug log
         raise HTTPException(status_code=500, detail="Invalid JSON format from AI")
 
     except Exception as e:
