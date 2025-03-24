@@ -2,6 +2,9 @@ import json
 from fastapi import HTTPException
 
 async def generate_tech_trends(groq_client):
+    if not groq_client:
+        raise HTTPException(status_code=500, detail="Groq client is not initialized")
+
     prompt = """
     Generate a JSON array of current technology trends with these fields:
     - name: Technology name
@@ -30,12 +33,21 @@ async def generate_tech_trends(groq_client):
             json_mode=True  # Guarantees valid JSON response
         )
         
-        trends = response.choices[0].message.content
-        return json.loads(trends)  # Parse JSON directly
+        # Ensure response is not empty
+        if not response or not response.choices:
+            raise HTTPException(status_code=500, detail="Groq AI returned an empty response")
 
-    except json.JSONDecodeError:
+        trends_text = response.choices[0].message.content
+        print("Raw AI Response:", trends_text)  # Debugging log
+
+        # Try parsing JSON
+        trends = json.loads(trends_text)
+        return trends
+
+    except json.JSONDecodeError as e:
+        print(f"JSON Parsing Error: {str(e)}")  # Debug log
         raise HTTPException(status_code=500, detail="Invalid JSON format from AI")
 
     except Exception as e:
-        print(f"AI Generation Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to generate trends")
+        print(f"AI Generation Error: {str(e)}")  # Debug log
+        raise HTTPException(status_code=500, detail=f"Failed to generate trends: {str(e)}")
