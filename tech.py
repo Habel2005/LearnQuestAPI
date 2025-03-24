@@ -26,7 +26,7 @@ async def generate_tech_trends(groq_client):
     try:
         print("Sending request to Groq AI...")  # Debugging
         response = groq_client.chat.completions.create(
-            model="llama3-70b",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.5,
             max_tokens=4096,
