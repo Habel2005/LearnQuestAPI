@@ -1,5 +1,4 @@
 import base64
-import logging
 import re
 import os
 from fastapi import HTTPException
@@ -12,8 +11,6 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import googleapiclient.discovery
 from datetime import datetime, timedelta
-import firebase_admin
-from firebase_admin import credentials, firestore
 
 # Check if Firebase is already initialized
 if not firebase_admin._apps:
