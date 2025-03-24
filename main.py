@@ -3,7 +3,6 @@ import random
 import sys
 import traceback
 from dotenv import load_dotenv
-import httpx
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Query,Request
 from pydantic import BaseModel
@@ -15,6 +14,7 @@ from groq import Groq
 from typing import List, Dict
 from daily import *
 from course import *
+from tech import generate_tech_trends
 load_dotenv()
 import logging
 
@@ -144,15 +144,6 @@ class CategoryService:
             "image": f"assets/card{random.randint(1, 4)}.jpg"
         } for i, category in enumerate(remaining_categories)]
 
-
-# ========== DATA MODELS ==========
-class TopRatedCourse(BaseModel):
-    title: str
-    duration: str
-    rating: float
-    learners: str
-    tech_stack: List[str]
-    image_url: str
 
 # ========== CORE SERVICES ==========
 class CourseService:
@@ -292,7 +283,33 @@ async def update_progress(course_id: str, request: Request):
         return progress
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/tech-trends")
+async def get_tech_trends(db: firestore.Client):
+    # Check cache in Firestore
+    cache_ref = db.collection('tech_trends_cache').document('current')
+    cache_data = cache_ref.get().to_dict()
     
+    if cache_data and datetime.now() - cache_data['timestamp'].replace(tzinfo=None) < timedelta(hours=6):
+        return cache_data['data']
+    
+    # Generate new data
+    genai, groq_client = init_ai_models()
+    new_trends = await generate_tech_trends(groq_client)
+    
+    # Add weekly trend data
+    for trend in new_trends:
+        base = trend['popularity'] - 10
+        trend['weeklyData'] = [base + i*2 for i in range(7)]
+    
+    # Update cache
+    cache_ref.set({
+        'data': new_trends,
+        'timestamp': datetime.now()
+    })
+    
+    return new_trends
+
 @app.get("/debug/firebase")
 async def test_firebase_auth():
     try:
