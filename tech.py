@@ -43,10 +43,13 @@ async def generate_tech_trends(groq_client):
         print("Raw AI Response:", trends_text)  # Debugging log
 
         # Ensure AI returns valid JSON
+        trends_text_cleaned = re.sub(r';(?=\s*["}])', '', trends_text)
+
+# Parse the cleaned JSON
         try:
-            trends = json.loads(trends_text)
-        except json.JSONDecodeError:
-            print(f"JSON Parsing Error - Raw AI Response: {trends_text}")  # Debug log
+            trends = json.loads(trends_text_cleaned)
+        except json.JSONDecodeError as e:
+            print(f"JSON Parsing Error: {str(e)}")  # Debug log
             raise HTTPException(status_code=500, detail="Invalid JSON format from AI")
 
         return trends
