@@ -48,6 +48,14 @@ CATEGORIES = [
 # Learning styles supported
 LEARNING_STYLES = ['Videos', 'Articles', 'Flashcards & Summaries', 'Step by Step Guides']
 
+def get_num_challenges(commitment: str) -> int:
+    """Determine the number of challenges based on daily commitment."""
+    if commitment == '5 minutes': return 1
+    if commitment == '10 minutes': return 1
+    if commitment == '15 minutes': return 2
+    if commitment == '30 minutes': return 2
+    return 3
+
 # Function to determine appropriate category for a search query
 def determine_category(query: str, interests: List[str]) -> str:
     """Determine the most appropriate category for a search query using AI."""
@@ -179,7 +187,7 @@ def generate_course_outline(
     try:
         # Try with Groq first (LLaMA or Mixtral)
         completion = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",  # or "mixtral-8x7b-32768"
+            model="llama-3.3-70b-versatile",  
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=4000
@@ -236,35 +244,56 @@ def generate_course_outline(
     # For each lesson, enrich with recommended resources based on learning style
     if learning_style == 'Videos':
         for lesson in course_data.get("lessons", []):
-            lesson["resources"] = get_youtube_resources(f"{query} {lesson['title']}", 2)
+            lesson["resources"] = get_youtube_resources(f"{query} {lesson['title']}", get_num_challenges(daily_commitment))
     elif learning_style == 'Articles':
         for lesson in course_data.get("lessons", []):
-            lesson["resources"] = get_articles_resources(f"{query} {lesson['title']}", 2)
+            lesson["resources"] = get_articles_resources(f"{query} {lesson['title']}", get_num_challenges(daily_commitment))
     elif learning_style == 'Step by Step Guides':
         for lesson in course_data.get("lessons", []):
-            lesson["resources"] = get_github_resources(f"{query} {lesson['title']} tutorial", 2)
+            lesson["resources"] = get_github_resources(f"{query} {lesson['title']} tutorial", get_num_challenges(daily_commitment))
     
     return course_data
 
 # Function to get YouTube video recommendations
-def get_youtube_resources(search_query: str, max_results: int = 2) -> List[Dict[str, str]]:
-    """Get YouTube video recommendations for a given query."""
+def get_youtube_resources(search_query: str, max_results: int = 3) -> List[Dict[str, str]]:
+    """Fetch structured YouTube video recommendations efficiently."""
     try:
-        url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={search_query}&type=video&key={API_KEYS['YOUTUBE_API_KEY']}&maxResults={max_results}"
+        url = (
+            f"https://www.googleapis.com/youtube/v3/search"
+            f"?part=snippet"
+            f"&q={search_query}"
+            f"&type=video"
+            f"&key={API_KEYS['YOUTUBE_API_KEY']}"
+            f"&maxResults={max_results}"
+            f"&order=relevance"  # Prioritizes relevance
+            f"&videoEmbeddable=true"  # Ensures videos are embeddable
+            f"&videoSyndicated=true"  # Limits to publicly available videos
+        )
+        
         response = requests.get(url)
         data = response.json()
         
         results = []
         if 'items' in data:
             for item in data['items']:
+                snippet = item['snippet']
                 video_id = item['id']['videoId']
-                title = item['snippet']['title']
+                title = snippet['title']
+                channel = snippet['channelTitle']
+                thumbnail = snippet['thumbnails']['high']['url']
+                published_at = snippet['publishedAt']
+
                 results.append({
                     "type": "video",
                     "title": title,
-                    "url": f"https://www.youtube.com/watch?v={video_id}"
+                    "url": f"https://www.youtube.com/watch?v={video_id}",
+                    "channel": channel,
+                    "thumbnail": thumbnail,
+                    "published_at": published_at,
                 })
+
         return results
+    
     except Exception as e:
         print(f"Error fetching YouTube resources: {e}")
         return []

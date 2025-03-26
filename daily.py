@@ -83,7 +83,7 @@ def generate_challenges_for_user(user_id):
             challenges.append(project_challenge)
     
     # Quiz challenge
-    quiz_challenge = generate_quiz_challenge(interests, skill_level)
+    quiz_challenge = generate_quiz_challenge(interests, skill_level,daily_commitment)
     if quiz_challenge:
         challenges.append(quiz_challenge)
 
@@ -92,7 +92,7 @@ def generate_challenges_for_user(user_id):
 
 
 def get_num_challenges(commitment: str) -> int:
-    """Determine the number of challenges based on daily commitment"""
+    """Determine the number of challenges based on daily commitment."""
     if commitment == '5 minutes': return 1
     if commitment == '10 minutes': return 2
     if commitment == '15 minutes': return 3
@@ -797,14 +797,17 @@ def extract_steps_from_text(text):
     # Limit to 5 steps
     return steps[:5] if steps else ["Plan your project", "Create basic structure", "Implement core functionality"]
 
-def generate_quiz_challenge(interests, skill_level):
+def generate_quiz_challenge(interests, skill_level, commitment):
     """Generate a quiz challenge to test knowledge using Gemini AI."""
     # Select a random interest
     interest = random.choice(interests) if interests else "Programming"
-    
+
+    # Determine the number of quiz questions
+    num_questions = get_num_challenges(commitment)
+
     # Generate quiz questions with AI
     prompt = f"""
-    Create a {skill_level.lower()} level quiz about {interest} with 3 multiple-choice questions.
+    Create a {skill_level.lower()} level quiz about {interest} with {num_questions} multiple-choice questions.
     Each question must include:
     - A question text
     - Four options (labeled a, b, c, d)
@@ -851,13 +854,13 @@ def generate_quiz_challenge(interests, skill_level):
         if response.status_code == 200:
             response_json = response.json()
             response_text = response_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-            
+
             try:
                 # Extract valid JSON from response
                 json_str = response_text[response_text.find('{'):response_text.rfind('}')+1]
                 quiz_data = json.loads(json_str)
 
-                if "quiz" in quiz_data:
+                if "quiz" in quiz_data and len(quiz_data["quiz"]) == num_questions:
                     return {
                         "id": f"quiz-{random.randint(1000, 9999)}",
                         "title": f"{interest} Knowledge Check",
@@ -865,41 +868,63 @@ def generate_quiz_challenge(interests, skill_level):
                         "source": "AI Generated",
                         "type": "quiz",
                         "difficulty": skill_level,
-                        "estimatedTime": "10 minutes",
+                        "estimatedTime": f"{commitment}",
                         "questions": quiz_data["quiz"],
                         "resourceType": "Quiz",
                         "resourceUrl": None
                     }
             except json.JSONDecodeError:
                 print("Error: Could not parse JSON response.")
-                return create_fallback_quiz(interest, skill_level)
+                return create_fallback_quiz(interest, skill_level, num_questions)
     except Exception as e:
         print(f"Error generating quiz: {e}")
 
-    return create_fallback_quiz(interest, skill_level)
+    return create_fallback_quiz(interest, skill_level, num_questions)
 
 
-def create_fallback_quiz(interest, skill_level):
-    """Create a generic fallback quiz"""
+def create_fallback_quiz(interest, skill_level, num_questions):
+    """Create a generic fallback quiz with multiple questions."""
+    fallback_questions = [
+        {
+            "question": f"What is the core concept of {interest}?",
+            "options": {
+                "a": "Basic principles",
+                "b": "Advanced techniques",
+                "c": "Historical context",
+                "d": "Industry trends"
+            },
+            "answer": "a"
+        },
+        {
+            "question": f"Which field is most related to {interest}?",
+            "options": {
+                "a": "Computer Science",
+                "b": "Chemistry",
+                "c": "History",
+                "d": "Music"
+            },
+            "answer": "a"
+        },
+        {
+            "question": f"Which of the following is NOT a key aspect of {interest}?",
+            "options": {
+                "a": "Its practical applications",
+                "b": "Its mathematical foundations",
+                "c": "Its role in mythology",
+                "d": "Its industry demand"
+            },
+            "answer": "c"
+        }
+    ]
+    
     return {
         "id": f"quiz-fallback-{random.randint(1000, 9999)}",
         "title": f"{interest} Fundamentals Quiz",
         "description": "Test your basic knowledge",
         "type": "quiz",
         "difficulty": skill_level,
-        "estimatedTime": "10 minutes",
-        "questions": [
-            {
-                "question": f"What is the core concept of {interest}?",
-                "options": {
-                    "a": "Basic principles",
-                    "b": "Advanced techniques",
-                    "c": "Historical context",
-                    "d": "Industry trends"
-                },
-                "answer": "a"
-            }
-        ],
+        "estimatedTime": f"{num_questions * 5} minutes",
+        "questions": fallback_questions[:num_questions],  # Limit fallback to required questions
         "resourceType": "Quiz"
     }
 
