@@ -400,13 +400,13 @@ def generate_ai_summary(content: str, model: str = "gemini") -> str:
                     "role": "user",
                     "content": f"Summarize this technical article in 3 concise bullet points:\n\n{content[:6000]}"
                 }],
-                model="deepseek-r1-distill-llama-70b",
+                model="llama-3.1-8b-instant",
                 temperature=0.3
             )
             return completion.choices[0].message.content
             
         # Default to Gemini
-        model = genai.GenerativeModel('gemini-1.5-pro-latest')
+        model = genai.GenerativeModel('gemini-2.5-pro')
         response = model.generate_content(
             f"Create a 3-point summary of this article. Focus on key technical concepts and practical applications:\n\n{content[:30000]}"
         )
