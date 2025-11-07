@@ -75,7 +75,7 @@ def determine_category(query: str, interests: List[str]) -> str:
     try:
         # Try with Groq (LLaMA or Mixtral) first
         completion = groq_client.chat.completions.create(
-            model="deepseek-r1-distill-llama-70b",
+            model="groq/compound",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=100
@@ -94,7 +94,7 @@ def determine_category(query: str, interests: List[str]) -> str:
 
     try:
         # Use Gemini as a fallback
-        genai_model = genai.GenerativeModel('gemini-1.5-pro-latest')
+        genai_model = genai.GenerativeModel('gemini-2.5-pro')
         response = genai_model.generate_content(prompt)
         response_text = response.text.strip()
 
@@ -205,7 +205,7 @@ def generate_course_outline(
     except Exception as e:
         print(f"Groq error, falling back to Gemini: {e}")
         # Fall back to Gemini if Groq fails
-        genai_model = genai.GenerativeModel('gemini-1.5-pro-latest')
+        genai_model = genai.GenerativeModel('gemini-2.5-pro')
         response = genai_model.generate_content(prompt)
         response_text = response.text
         
