@@ -310,7 +310,7 @@ def generate_ai_coding_challenge(interests, skill_level):
     
     try:
         # Use Gemini 1.5 Pro
-        model = genai.GenerativeModel("gemini-1.5-pro")
+        model = genai.GenerativeModel("gemini-2.5-pro")
         
         response = model.generate_content(prompt)
         
@@ -716,7 +716,7 @@ def generate_project_challenge(interests, skill_level):
         }
         
         payload = {
-            "model": "llama3-70b-8192",
+            "model": "llama-3.3-70b-versatile",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7
         }
